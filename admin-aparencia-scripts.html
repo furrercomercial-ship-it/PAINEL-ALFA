@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Integrações e Scripts — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/display/fullscreen.min.css">
+<style>
+/* ── Cabeçalho + cards de resumo ─────────────────────────────────────── */
+.scr-desc{font-size:13px;color:var(--text-secondary);max-width:760px;margin:-8px 0 18px;line-height:1.55;}
+.scr-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;}
+.scr-summary .metric-card{padding:16px 18px;}
+
+/* ── Abas ─────────────────────────────────────────────────────────────── */
+.scr-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border-color);margin-bottom:20px;flex-wrap:wrap;}
+.scr-tab{padding:11px 16px;font-size:12.5px;font-weight:700;color:var(--text-muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px;}
+.scr-tab:hover{color:var(--text-main);}
+.scr-tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+.scr-pane{display:none;}
+.scr-pane.active{display:block;}
+
+/* ── Cards de integração ──────────────────────────────────────────────── */
+.integ-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.integ-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:16px;display:flex;flex-direction:column;gap:12px;}
+.integ-card-top{display:flex;align-items:flex-start;gap:12px;}
+.integ-icon{width:34px;height:34px;flex-shrink:0;border-radius:var(--radius-sm);background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;}
+.integ-icon svg{width:18px;height:18px;}
+.integ-info{flex:1;min-width:0;}
+.integ-name{font-size:13.5px;font-weight:800;color:var(--text-main);}
+.integ-desc{font-size:11.5px;color:var(--text-muted);line-height:1.4;margin-top:2px;}
+.integ-card-mid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.integ-meta{font-size:10.5px;color:var(--text-muted);}
+.integ-card-actions{display:flex;gap:8px;margin-top:auto;}
+
+/* ── Switch ───────────────────────────────────────────────────────────── */
+.switch{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;}
+.switch input{opacity:0;width:0;height:0;position:absolute;}
+.switch-track{position:absolute;inset:0;background:var(--border-color);border-radius:var(--radius-full);cursor:pointer;transition:.15s;}
+.switch-track::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.15s;}
+.switch input:checked+.switch-track{background:var(--success);}
+.switch input:checked+.switch-track::before{transform:translateX(16px);}
+.switch input:disabled+.switch-track{opacity:.4;cursor:default;}
+
+/* ── Editor de código (CodeMirror) ───────────────────────────────────── */
+.editor-wrap{border:1px solid var(--border-color);border-radius:var(--radius-sm);overflow:hidden;}
+.editor-toolbar{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--bg-section);border-bottom:1px solid var(--border-color);flex-wrap:wrap;}
+.editor-toolbar button{background:transparent;border:1px solid var(--border-color);color:var(--text-secondary);font-size:11px;font-weight:700;padding:5px 9px;border-radius:var(--radius-sm);cursor:pointer;display:inline-flex;align-items:center;gap:5px;}
+.editor-toolbar button:hover{color:var(--text-main);border-color:var(--text-muted);}
+.editor-toolbar button.on{color:var(--primary);border-color:var(--primary);}
+.editor-status{margin-left:auto;font-size:10.5px;color:var(--text-muted);}
+.CodeMirror{height:260px;font-size:12.5px;}
+.editor-wrap.fullscreen-mode .CodeMirror{height:calc(100vh - 46px) !important;}
+.editor-results{margin-top:10px;font-size:12px;display:flex;flex-direction:column;gap:5px;}
+.editor-results .err{color:var(--danger);}
+.editor-results .warn{color:var(--warning);}
+.editor-results .ok{color:var(--success);}
+
+/* ── Regras diversas de formulário ───────────────────────────────────── */
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--border-color);border-radius:var(--radius-full);font-size:11.5px;cursor:pointer;color:var(--text-secondary);}
+.chip input{accent-color:var(--primary);}
+.chip.active{border-color:var(--primary);color:var(--primary);background:var(--primary-soft);}
+.strategy-hint{font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;}
+.url-rule-row{display:grid;grid-template-columns:140px 1fr auto;gap:8px;margin-bottom:8px;align-items:center;}
+.event-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:10px;}
+.event-row{display:flex;align-items:center;gap:8px;font-size:12px;}
+.event-row.disabled{opacity:.45;}
+.event-row input{accent-color:var(--primary);}
+.event-row .tag-soon{font-size:9.5px;background:var(--bg-section);color:var(--text-muted);padding:2px 6px;border-radius:var(--radius-full);margin-left:auto;}
+
+/* ── Diagnóstico ──────────────────────────────────────────────────────── */
+.diag-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
+.diag-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.diag-item span{font-size:12.5px;font-weight:700;}
+
+.warn-banner{background:var(--warning-soft);border:1px solid rgba(245,158,11,.35);color:var(--warning);padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;margin-bottom:14px;}
+.danger-btn-box{background:var(--danger-soft);border:1px solid rgba(226,61,66,.3);border-radius:var(--radius-sm);padding:16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.cfg-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--border-color);}
+.cfg-toggle-row:last-child{border-bottom:none;}
+.cfg-toggle-txt b{font-size:13px;color:var(--text-main);}
+.cfg-toggle-txt div{font-size:11.5px;color:var(--text-muted);margin-top:2px;}
+.tooltip{border-bottom:1px dotted var(--text-muted);cursor:help;}
+
+@media(max-width:720px){ .url-rule-row{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Integrações e Scripts</div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-secondary" id="btnTestarTudo">Testar integrações</button>
+        <button class="btn btn-secondary" id="btnNovoScript">Adicionar script personalizado</button>
+        <button class="btn btn-primary" id="btnNovaIntegracao">Adicionar integração</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <p class="scr-desc">Conecte ferramentas de análise, anúncios, atendimento e monitoramento ao site da Alfa. Você também pode adicionar scripts personalizados e controlar onde eles serão executados.</p>
+
+      <div class="scr-summary" id="scrSummary"></div>
+
+      <div class="scr-tabs" id="scrTabs">
+        <button class="scr-tab active" data-tab="integracoes">Integrações</button>
+        <button class="scr-tab" data-tab="scripts">Scripts personalizados</button>
+        <button class="scr-tab" data-tab="diagnostico">Diagnóstico</button>
+        <button class="scr-tab" data-tab="historico">Histórico de alterações</button>
+        <button class="scr-tab" data-tab="config">Configurações gerais</button>
+      </div>
+
+      <div class="scr-pane active" id="pane-integracoes">
+        <div class="integ-grid" id="integracoesGrid"></div>
+      </div>
+
+      <div class="scr-pane" id="pane-scripts">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Nome</th><th>Local</th><th>Páginas</th><th>Status</th><th>Última alteração</th><th></th></tr></thead>
+            <tbody id="scriptsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="scr-pane" id="pane-diagnostico">
+        <p class="scr-desc" style="margin-top:0;">Abre uma cópia oculta do site publicado e verifica de verdade o que está rodando — sem precisar sair do painel.</p>
+        <button class="btn btn-secondary" id="btnRunDiag" style="margin-bottom:16px;">Executar diagnóstico novamente</button>
+        <div id="diagResult"></div>
+      </div>
+
+      <div class="scr-pane" id="pane-historico">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Quando</th><th>Item</th><th>Ação</th><th>Usuário</th><th></th></tr></thead>
+            <tbody id="historicoTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="scr-pane" id="pane-config">
+        <div class="card" style="max-width:640px;">
+          <div class="card-title">Comportamento geral</div>
+          <div id="cfgToggles"></div>
+          <button class="btn btn-primary" id="btnSalvarCfg" style="margin-top:16px;">Salvar configurações</button>
+        </div>
+        <div class="danger-btn-box" style="max-width:640px;margin-top:18px;">
+          <div><b style="font-size:13px;">Desativar scripts personalizados</b><div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px;">Desliga todos os scripts personalizados no site público na hora, sem apagar nenhuma configuração. Integrações continuam funcionando.</div></div>
+          <button class="btn btn-danger" id="btnEmergencia">Desativar agora</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INTEGRAÇÃO -->
+<div class="modal-overlay" id="integModal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-head"><div class="modal-title" id="integModalTitle">Integração</div><button class="modal-close" onclick="closeIntegModal()">✕</button></div>
+    <div id="integModalBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeIntegModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveIntegBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SCRIPT PERSONALIZADO -->
+<div class="modal-overlay" id="scriptModal">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-head"><div class="modal-title" id="scriptModalTitle">Novo Script Personalizado</div><button class="modal-close" onclick="closeScriptModal()">✕</button></div>
+    <div class="warn-banner">Scripts personalizados podem afetar o funcionamento, a segurança e a velocidade do site. Insira apenas códigos de fontes confiáveis.</div>
+    <div class="field-row">
+      <div class="field"><label>Nome do script *</label><input id="fs_nome" placeholder="Ex: Selo de segurança"></div>
+      <div class="field"><label>Categoria (consentimento) <span class="tooltip" title="Define se o script precisa de autorização de cookies antes de rodar.">?</span></label>
+        <select id="fs_categoria"><option value="essencial">Essencial</option><option value="analytics">Analytics</option><option value="marketing">Marketing</option><option value="personalizacao">Personalização</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Descrição</label><input id="fs_descricao" placeholder="Opcional — pra você lembrar pra que serve"></div>
+
+    <div class="field">
+      <label>Código *</label>
+      <div class="editor-wrap" id="scriptEditorWrap">
+        <div class="editor-toolbar">
+          <button type="button" data-ed-act="fullscreen">⛶ Tela cheia</button>
+          <button type="button" data-ed-act="wrap">↵ Quebra de linha</button>
+          <button type="button" data-ed-act="format">✨ Formatar</button>
+          <button type="button" data-ed-act="copy">⧉ Copiar</button>
+          <button type="button" data-ed-act="clear">🗑 Limpar</button>
+          <span class="editor-status" id="scriptEditorStatus">0 linhas · 0 caracteres</span>
+        </div>
+        <textarea id="scriptCodeArea"></textarea>
+      </div>
+      <div class="editor-results" id="scriptEditorResults"></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field"><label>Local de carregamento</label>
+        <select id="fs_posicao">
+          <option value="head">Dentro do &lt;head&gt;</option>
+          <option value="body_open">Logo após a abertura do &lt;body&gt;</option>
+          <option value="body_close" selected>Antes do fechamento do &lt;/body&gt;</option>
+        </select>
+        <div class="strategy-hint" id="posicaoHint"></div>
+      </div>
+      <div class="field"><label>Dispositivos</label>
+        <select id="fs_dispositivos"><option value="todos">Todos</option><option value="desktop">Somente desktop</option><option value="tablet">Somente tablet</option><option value="celular">Somente celular</option></select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Páginas</label>
+      <select id="fs_paginas_modo" style="margin-bottom:8px;">
+        <option value="todas">Todas as páginas</option>
+        <option value="somente">Somente páginas selecionadas</option>
+        <option value="exceto">Todas, exceto páginas selecionadas</option>
+      </select>
+      <div class="chip-row" id="fs_paginas_chips"></div>
+      <div id="fs_regras_url" style="margin-top:10px;"></div>
+      <button type="button" class="btn btn-secondary btn-sm" id="btnAddRegraUrl" style="margin-top:6px;">+ Regra de URL personalizada</button>
+    </div>
+
+    <div class="field-row">
+      <div class="field"><label>Estratégia de carregamento</label>
+        <select id="fs_estrategia">
+          <option value="normal">Normal</option>
+          <option value="async">Async</option>
+          <option value="defer">Defer</option>
+          <option value="apos_carregamento">Após carregamento da página</option>
+          <option value="apos_interacao">Após interação do usuário</option>
+          <option value="atraso">Com atraso configurável</option>
+        </select>
+      </div>
+      <div class="field" id="fs_atraso_wrap" style="display:none;"><label>Atraso (ms)</label><input type="number" id="fs_atraso_ms" min="0" step="100" value="1000"></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field"><label>Prioridade</label><select id="fs_prioridade"><option value="alta">Alta</option><option value="normal" selected>Normal</option><option value="baixa">Baixa</option></select></div>
+      <div class="field"><label>Ambiente</label><select id="fs_ambiente"><option value="producao" selected>Produção</option><option value="desenvolvimento">Desenvolvimento</option><option value="ambos">Ambos</option></select></div>
+    </div>
+
+    <div class="field"><label class="chk-row"><input type="checkbox" id="fs_consent_gate"> Executar somente após o consentimento do visitante (categoria acima)</label></div>
+
+    <div class="modal-foot" style="justify-content:space-between;">
+      <button class="btn btn-secondary" onclick="closeScriptModal()">Cancelar</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" id="btnTestarScript">Testar</button>
+        <button class="btn btn-secondary" id="btnRascunhoScript">Salvar como rascunho</button>
+        <button class="btn btn-primary" id="btnPublicarScript">Publicar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HISTÓRICO (diff) -->
+<div class="modal-overlay" id="histModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-head"><div class="modal-title">Comparar alteração</div><button class="modal-close" onclick="document.getElementById('histModal').classList.remove('open')">✕</button></div>
+    <div class="field-row">
+      <div class="field"><label>Antes</label><pre id="histAntes" style="background:var(--bg-main);padding:12px;font-size:11px;max-height:320px;overflow:auto;border-radius:var(--radius-sm);"></pre></div>
+      <div class="field"><label>Depois</label><pre id="histDepois" style="background:var(--bg-main);padding:12px;font-size:11px;max-height:320px;overflow:auto;border-radius:var(--radius-sm);"></pre></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="document.getElementById('histModal').classList.remove('open')">Fechar</button>
+      <button class="btn btn-primary" id="btnRestaurar">Restaurar esta versão</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="event-manager.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/comment-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/display/fullscreen.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.8.8/standalone.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.8.8/parser-html.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.8.8/parser-babel.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.8.8/parser-postcss.js"></script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   DADOS ESTÁTICOS
+   ════════════════════════════════════════════════════════════════════ */
+const ICON = {
+  analytics: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+  tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.17L4 3a1 1 0 0 0-1 1l.17 5.59a2 2 0 0 0 .66 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
+  target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  code: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+};
+
+const INTEGRATION_DEFS = {
+  ga4:              { nome: 'Google Analytics 4', desc: 'Métricas de tráfego e comportamento dos visitantes.', icon: ICON.analytics, campo1: 'ID de medição', ph1: 'G-XXXXXXXXXX', regex1: /^G-[A-Z0-9]{6,}$/i },
+  gtm:              { nome: 'Google Tag Manager', desc: 'Gerencia outras tags do site sem precisar editar código.', icon: ICON.tag, campo1: 'ID do contêiner', ph1: 'GTM-XXXXXXX', regex1: /^GTM-[A-Z0-9]+$/i },
+  meta_pixel:       { nome: 'Meta Pixel', desc: 'Rastreamento de anúncios do Facebook/Instagram.', icon: ICON.target, campo1: 'ID do Pixel', ph1: '123456789012345', regex1: /^\d{10,20}$/, eventos: true },
+  tiktok_pixel:     { nome: 'TikTok Pixel', desc: 'Rastreamento de anúncios do TikTok.', icon: ICON.target, campo1: 'ID do Pixel', ph1: 'C4A1B2C3D4E5F6G', regex1: /^[A-Z0-9]{8,25}$/i, eventos: true },
+  clarity:          { nome: 'Microsoft Clarity', desc: 'Mapas de calor e gravação de sessão, de graça.', icon: ICON.eye, campo1: 'ID do projeto', ph1: 'abcdefghij', regex1: /^[a-z0-9]{6,15}$/i },
+  google_ads:       { nome: 'Google Ads', desc: 'Rastreamento de conversão de campanhas pagas.', icon: ICON.target, campo1: 'ID da conversão', ph1: 'AW-XXXXXXXXX', regex1: /^AW-\d+$/i, campo2: 'Rótulo da conversão', ph2: 'AbC-D1efG2hijK' },
+  pinterest_tag:    { nome: 'Pinterest Tag', desc: 'Rastreamento de anúncios do Pinterest.', icon: ICON.target, campo1: 'ID da Tag', ph1: '2612345678901', regex1: /^\d{10,20}$/ },
+  hotjar:           { nome: 'Hotjar', desc: 'Mapas de calor e gravação de sessão dos visitantes.', icon: ICON.eye, campo1: 'ID do site', ph1: '1234567', regex1: /^\d{5,9}$/ },
+  chat_atendimento: { nome: 'Chat de atendimento', desc: 'Widget de chat ao vivo (Tawk.to, Crisp, JivoChat...).', icon: ICON.chat, codigo: true },
+  personalizada:    { nome: 'Integração personalizada', desc: 'Qualquer outro código de rastreamento ou marketing.', icon: ICON.code, codigo: true, multi: true },
+};
+const SINGLETON_TYPES = Object.keys(INTEGRATION_DEFS).filter(t => t !== 'personalizada');
+
+const PAGE_KEYS = [
+  { key: 'home', label: 'Início' }, { key: 'categoria', label: 'Categoria' },
+  { key: 'produto', label: 'Produto' }, { key: 'carrinho', label: 'Carrinho' },
+  { key: 'checkout', label: 'Checkout' }, { key: 'favoritos', label: 'Favoritos' },
+  { key: 'auth', label: 'Login / Cadastro / Minha Conta' },
+];
+const URL_COND = { exata: 'URL é exatamente', contem: 'URL contém', comeca_com: 'URL começa com', nao_contem: 'URL não contém' };
+const POSICAO_HINT = {
+  head: 'Indicado para verificações, fontes, Analytics e ferramentas que precisam carregar no início.',
+  body_open: 'Indicado para partes específicas do Google Tag Manager e ferramentas que exigem carregamento imediato.',
+  body_close: 'Indicado para chats, widgets e scripts que podem carregar após o conteúdo principal.',
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   ESTADO
+   ════════════════════════════════════════════════════════════════════ */
+let INTEGRACOES = [], SCRIPTS = [], HISTORICO = [], PROFILES = {}, SCRIPTS_CONFIG = {};
+let editingIntegTipo = null, editingIntegId = null, editingScriptId = null;
+let cmScript = null, urlRules = [], histCurrent = null;
+let canView = false, canEditInteg = false, canAddScript = false, canPublish = false, canDelete = false, canHistory = false;
+
+function fmtWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), diffMs = Date.now() - d.getTime(), min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'agora mesmo';
+  if (min < 60) return 'há ' + min + ' min';
+  if (min < 1440) return 'há ' + Math.floor(min / 60) + 'h';
+  return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function who(id) { return id && PROFILES[id] ? PROFILES[id] : '—'; }
+
+/* ════════════════════════════════════════════════════════════════════
+   CARGA DE DADOS
+   ════════════════════════════════════════════════════════════════════ */
+async function loadAll() {
+  const [{ data: integ }, { data: scr }, { data: settings }] = await Promise.all([
+    window.sb.from('integracoes').select('*').order('created_at'),
+    window.sb.from('scripts_custom').select('*').order('created_at', { ascending: false }),
+    window.sb.from('site_settings').select('scripts_config').eq('id', 1).single(),
+  ]);
+  INTEGRACOES = integ || []; SCRIPTS = scr || [];
+  SCRIPTS_CONFIG = (settings && settings.scripts_config) || { custom_scripts_enabled: true, pause_marketing: false, pause_analytics: false, allow_dev_scripts: false, debug_logs: false, block_during_maintenance: false };
+
+  const ids = new Set();
+  INTEGRACOES.forEach(i => { if (i.created_by) ids.add(i.created_by); if (i.updated_by) ids.add(i.updated_by); });
+  SCRIPTS.forEach(s => { if (s.created_by) ids.add(s.created_by); if (s.updated_by) ids.add(s.updated_by); });
+  if (ids.size) {
+    const { data: profs } = await window.sb.from('profiles').select('id,full_name').in('id', Array.from(ids));
+    (profs || []).forEach(p => { PROFILES[p.id] = p.full_name; });
+  }
+
+  renderSummary(); renderIntegracoes(); renderScripts(); renderConfig();
+}
+
+async function loadHistorico() {
+  const { data } = await window.sb.from('scripts_historico').select('*').order('created_at', { ascending: false }).limit(200);
+  HISTORICO = data || [];
+  const ids = new Set(HISTORICO.map(h => h.usuario_id).filter(Boolean));
+  const missing = Array.from(ids).filter(id => !PROFILES[id]);
+  if (missing.length) {
+    const { data: profs } = await window.sb.from('profiles').select('id,full_name').in('id', missing);
+    (profs || []).forEach(p => { PROFILES[p.id] = p.full_name; });
+  }
+  renderHistorico();
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RESUMO
+   ════════════════════════════════════════════════════════════════════ */
+function renderSummary() {
+  const ativas = INTEGRACOES.filter(i => i.status === 'ativo').length;
+  const scriptsAtivos = SCRIPTS.filter(s => s.status === 'ativo').length;
+  const comErro = INTEGRACOES.filter(i => i.status === 'ativo' && i.configuracoes && i.configuracoes.ultimo_teste && i.configuracoes.ultimo_teste.detectado === false).length +
+    SCRIPTS.filter(s => s.status === 'ativo' && validarCodigo(s.codigo, s.nome, s.id).errors.length > 0).length;
+  const todos = [...INTEGRACOES, ...SCRIPTS].filter(x => x.updated_at).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  const ultima = todos[0];
+
+  document.getElementById('scrSummary').innerHTML = [
+    metric('Integrações ativas', ativas),
+    metric('Scripts personalizados ativos', scriptsAtivos),
+    metric('Scripts com erro', comErro, comErro ? 'bad' : ''),
+    metric('Última alteração', ultima ? fmtWhen(ultima.updated_at) : '—', '', ultima ? 'por ' + who(ultima.updated_by) : ''),
+  ].join('');
+}
+function metric(lbl, val, cls, sub) {
+  return `<div class="metric-card"><div class="metric-lbl">${lbl}</div><div class="metric-val${cls ? ' ' + cls : ''}">${val}</div>${sub ? `<div class="metric-sub">${sub}</div>` : ''}</div>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ABAS
+   ════════════════════════════════════════════════════════════════════ */
+document.getElementById('scrTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.scr-tab'); if (!btn) return;
+  document.querySelectorAll('.scr-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.scr-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pane-' + btn.dataset.tab).classList.add('active');
+  if (btn.dataset.tab === 'historico' && !HISTORICO.length) loadHistorico();
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   INTEGRAÇÕES — render
+   ════════════════════════════════════════════════════════════════════ */
+function statusInfo(row) {
+  if (!row) return { label: 'Não configurado', cls: 'gray' };
+  if (row.status === 'ativo') {
+    const teste = row.configuracoes && row.configuracoes.ultimo_teste;
+    if (teste && teste.detectado === false) return { label: 'Com erro', cls: 'red' };
+    return { label: 'Ativo', cls: 'green' };
+  }
+  return { label: 'Inativo', cls: 'gray' };
+}
+function renderIntegracoes() {
+  const cards = [];
+  SINGLETON_TYPES.forEach(tipo => cards.push(integCard(tipo, INTEGRATION_DEFS[tipo], INTEGRACOES.find(i => i.tipo === tipo))));
+  INTEGRACOES.filter(i => i.tipo === 'personalizada').forEach(row => cards.push(integCard('personalizada', INTEGRATION_DEFS.personalizada, row)));
+  document.getElementById('integracoesGrid').innerHTML = cards.join('');
+}
+function integCard(tipo, def, row) {
+  const st = statusInfo(row);
+  const nome = (row && tipo === 'personalizada') ? row.nome : def.nome;
+  const meta = row ? `Alterado ${fmtWhen(row.updated_at)} por ${who(row.updated_by)}` : '';
+  const idAttr = row ? row.id : 'null';
+  return `<div class="integ-card">
+    <div class="integ-card-top">
+      <div class="integ-icon">${def.icon}</div>
+      <div class="integ-info"><div class="integ-name">${nome}</div><div class="integ-desc">${def.desc}</div></div>
+      <label class="switch"><input type="checkbox" ${row && row.status === 'ativo' ? 'checked' : ''} ${row && canEditInteg ? '' : 'disabled'} onchange="toggleIntegracao(${idAttr}, this.checked)"><span class="switch-track"></span></label>
+    </div>
+    <div class="integ-card-mid"><span class="status-pill ${st.cls}">${st.label}</span>${meta ? `<span class="integ-meta">${meta}</span>` : ''}</div>
+    <div class="integ-card-actions">
+      <button class="btn btn-secondary btn-sm" onclick="openIntegModal('${tipo}', ${idAttr})">Configurar</button>
+      <button class="btn btn-secondary btn-sm" ${row ? '' : 'disabled'} onclick="testarIntegracao(${idAttr})">Testar</button>
+      ${(tipo === 'personalizada' && row && canDelete) ? `<button class="btn btn-danger btn-sm" onclick="excluirIntegracao(${idAttr})">Excluir</button>` : ''}
+    </div>
+  </div>`;
+}
+
+document.getElementById('btnNovaIntegracao').addEventListener('click', () => openIntegModal('personalizada', null));
+
+/* ── Modal de integração ── */
+function openIntegModal(tipo, id) {
+  editingIntegTipo = tipo; editingIntegId = id;
+  const def = INTEGRATION_DEFS[tipo];
+  const row = id ? INTEGRACOES.find(i => i.id === id) : null;
+  document.getElementById('integModalTitle').textContent = (row ? 'Editar ' : 'Configurar ') + (tipo === 'personalizada' && row ? row.nome : def.nome);
+
+  let html = '';
+  if (tipo === 'personalizada') html += `<div class="field"><label>Nome da integração *</label><input id="fi_nome" value="${row ? esc(row.nome) : ''}" placeholder="Ex: Rastreador da agência X"></div>`;
+  if (def.codigo) {
+    html += `<div class="field"><label>Código *</label>
+      <div class="editor-wrap" id="integEditorWrap">
+        <div class="editor-toolbar">
+          <button type="button" data-ied-act="fullscreen">⛶ Tela cheia</button>
+          <button type="button" data-ied-act="wrap">↵ Quebra de linha</button>
+          <button type="button" data-ied-act="format">✨ Formatar</button>
+          <button type="button" data-ied-act="copy">⧉ Copiar</button>
+          <button type="button" data-ied-act="clear">🗑 Limpar</button>
+          <span class="editor-status" id="integEditorStatus">0 linhas · 0 caracteres</span>
+        </div>
+        <textarea id="integCodeArea">${row ? esc((row.configuracoes && row.configuracoes.codigo) || '') : ''}</textarea>
+      </div></div>`;
+  } else {
+    html += `<div class="field"><label>${def.campo1} *</label><input id="fi_id1" value="${row ? esc(row.identificador || '') : ''}" placeholder="${def.ph1}"><div class="strategy-hint" id="fi_id1_hint"></div></div>`;
+    if (def.campo2) html += `<div class="field"><label>${def.campo2}</label><input id="fi_id2" value="${row ? esc(row.identificador_extra || '') : ''}" placeholder="${def.ph2}"></div>`;
+  }
+  html += `<div class="field"><label>Ambiente</label><select id="fi_ambiente">
+      <option value="producao" ${(!row || row.ambiente === 'producao') ? 'selected' : ''}>Produção</option>
+      <option value="desenvolvimento" ${row && row.ambiente === 'desenvolvimento' ? 'selected' : ''}>Desenvolvimento</option>
+      <option value="ambos" ${row && row.ambiente === 'ambos' ? 'selected' : ''}>Ambos</option>
+    </select></div>`;
+
+  if (def.eventos) {
+    const ativos = (row && row.configuracoes && row.configuracoes.eventos_ativos) || {};
+    const impl = Object.entries(AlfaEvents.registry).filter(([, v]) => v.implementado);
+    const soon = Object.entries(AlfaEvents.registry).filter(([, v]) => !v.implementado);
+    html += `<div class="field"><label>Eventos automáticos do e-commerce</label><div class="event-list">` +
+      impl.map(([k, v]) => `<label class="event-row"><input type="checkbox" data-ev="${k}" ${ativos[k] === false ? '' : 'checked'}>${v.label}</label>`).join('') +
+      soon.map(([, v]) => `<label class="event-row disabled"><input type="checkbox" disabled>${v.label}<span class="tag-soon">Disponível — aguardando implementação</span></label>`).join('') +
+      `</div></div>`;
+  }
+
+  document.getElementById('integModalBody').innerHTML = html;
+  document.getElementById('integModal').classList.add('open');
+
+  if (def.codigo) {
+    const ta = document.getElementById('integCodeArea');
+    const cm = CodeMirror.fromTextArea(ta, editorOptions('htmlmixed'));
+    wireEditorToolbar(cm, 'integEditorWrap', '[data-ied-act]', 'integEditorStatus');
+    ta._cm = cm;
+  }
+  if (def.campo1) {
+    document.getElementById('fi_id1').addEventListener('input', function () {
+      const ok = def.regex1.test(this.value.trim());
+      document.getElementById('fi_id1_hint').innerHTML = !this.value.trim() ? '' : (ok ? '<span style="color:var(--success)">✓ Formato válido</span>' : '<span style="color:var(--danger)">Formato inválido — esperado algo como ' + def.ph1 + '</span>');
+    });
+  }
+}
+function closeIntegModal() { document.getElementById('integModal').classList.remove('open'); }
+
+document.getElementById('saveIntegBtn').addEventListener('click', async () => {
+  const tipo = editingIntegTipo, def = INTEGRATION_DEFS[tipo], id = editingIntegId;
+  const payload = { ambiente: document.getElementById('fi_ambiente').value };
+
+  if (tipo === 'personalizada') {
+    const nome = document.getElementById('fi_nome').value.trim();
+    if (!nome) { AdminShell.toast('Informe o nome da integração.', 'error'); return; }
+    payload.nome = nome;
+  } else payload.nome = def.nome;
+
+  if (def.codigo) {
+    const cm = document.getElementById('integCodeArea')._cm;
+    const codigo = cm.getValue().trim();
+    if (!codigo) { AdminShell.toast('Cole o código da integração.', 'error'); return; }
+    payload.configuracoes = { codigo };
+    payload.identificador = null;
+  } else {
+    const id1 = document.getElementById('fi_id1').value.trim();
+    if (!id1) { AdminShell.toast('Informe ' + def.campo1.toLowerCase() + '.', 'error'); return; }
+    if (!def.regex1.test(id1)) { AdminShell.toast('Formato inválido pra ' + def.campo1 + '.', 'error'); return; }
+    payload.identificador = id1;
+    payload.identificador_extra = def.campo2 ? (document.getElementById('fi_id2').value.trim() || null) : null;
+    if (def.eventos) {
+      const eventos_ativos = {};
+      document.querySelectorAll('#integModalBody [data-ev]').forEach(inp => { eventos_ativos[inp.dataset.ev] = inp.checked; });
+      payload.configuracoes = { eventos_ativos };
+    }
+  }
+  payload.status = id ? (INTEGRACOES.find(i => i.id === id).status === 'ativo' ? 'ativo' : 'inativo') : 'ativo';
+
+  const before = id ? INTEGRACOES.find(i => i.id === id) : null;
+  const { data: { user } } = await window.sb.auth.getUser();
+  payload.updated_by = user ? user.id : null;
+  let result;
+  if (id) result = await window.sb.from('integracoes').update(payload).eq('id', id).select().single();
+  else { payload.tipo = tipo; payload.created_by = user ? user.id : null; result = await window.sb.from('integracoes').insert(payload).select().single(); }
+
+  if (result.error) { AdminShell.toast('Erro: ' + result.error.message, 'error'); return; }
+  await logHistorico('integracao', result.data.id, id ? 'editado' : 'criado', before, result.data);
+  AdminShell.toast('Integração salva!', 'success');
+  closeIntegModal();
+  await loadAll();
+});
+
+window.toggleIntegracao = async function (id, ligado) {
+  if (!id) return;
+  const before = INTEGRACOES.find(i => i.id === id);
+  const { data, error } = await window.sb.from('integracoes').update({ status: ligado ? 'ativo' : 'inativo' }).eq('id', id).select().single();
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico('integracao', id, ligado ? 'ativado' : 'desativado', before, data);
+  AdminShell.toast(ligado ? 'Integração ativada.' : 'Integração desativada.', 'success');
+  await loadAll();
+};
+
+window.excluirIntegracao = async function (id) {
+  if (!confirm('Excluir esta integração?')) return;
+  const before = INTEGRACOES.find(i => i.id === id);
+  const { error } = await window.sb.from('integracoes').delete().eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico('integracao', id, 'excluido', before, null);
+  await loadAll();
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   SCRIPTS PERSONALIZADOS
+   ════════════════════════════════════════════════════════════════════ */
+function renderScripts() {
+  const tbody = document.getElementById('scriptsTbody');
+  if (!SCRIPTS.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="table-empty">Nenhum script personalizado cadastrado.<br><br>
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('btnNovoScript').click()">Adicionar primeiro script</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.querySelector('[data-tab=integracoes]').click()">Ver integrações recomendadas</button></div></td></tr>`;
+    return;
+  }
+  const posLabel = { head: '&lt;head&gt;', body_open: 'Início do body', body_close: 'Final do body' };
+  const pagLabel = s => s.paginas_modo === 'todas' ? 'Todas' : (s.paginas_modo === 'somente' ? 'Somente: ' : 'Exceto: ') + (s.paginas || []).join(', ');
+  tbody.innerHTML = SCRIPTS.map(s => `
+    <tr>
+      <td class="strong">${esc(s.nome)}<div style="font-size:11px;color:var(--text-muted);">${esc(s.descricao || '')}</div></td>
+      <td>${posLabel[s.posicao]}</td>
+      <td style="max-width:160px;font-size:11.5px;">${pagLabel(s)}</td>
+      <td><span class="status-pill ${s.status === 'ativo' ? 'green' : (s.status === 'rascunho' ? 'amber' : 'gray')}">${s.status === 'ativo' ? 'Ativo' : (s.status === 'rascunho' ? 'Rascunho' : 'Inativo')}</span></td>
+      <td style="font-size:11.5px;">${fmtWhen(s.updated_at)}<br>${who(s.updated_by)}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openScriptModal(${s.id})">${canAddScript ? 'Editar' : 'Ver'}</button>
+        ${canAddScript ? `<button class="btn btn-secondary btn-sm" onclick="duplicarScript(${s.id})">Duplicar</button>
+        ${s.status === 'ativo' ? `<button class="btn btn-secondary btn-sm" onclick="setScriptStatus(${s.id},'inativo')">Desativar</button>` : `<button class="btn btn-secondary btn-sm" onclick="setScriptStatus(${s.id},'ativo')">Ativar</button>`}` : ''}
+        ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="excluirScript(${s.id})">Excluir</button>` : ''}
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('btnNovoScript').addEventListener('click', () => openScriptModal(null));
+
+function editorOptions(mode) {
+  return {
+    mode: mode, theme: 'dracula', lineNumbers: true, indentUnit: 2, tabSize: 2, indentWithTabs: false,
+    matchBrackets: true, autoCloseBrackets: true, autoCloseTags: true, styleActiveLine: true,
+    foldGutter: true, gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+    lineWrapping: false, extraKeys: { 'Ctrl-F': 'findPersistent', 'Ctrl-H': 'replace', 'Shift-Ctrl-H': 'replaceAll', 'Ctrl-Q': cm => cm.foldCode(cm.getCursor()) },
+  };
+}
+function wireEditorToolbar(cm, wrapId, actSelector, statusId) {
+  const wrap = document.getElementById(wrapId);
+  function updateStatus() {
+    const el = document.getElementById(statusId); if (!el) return;
+    const val = cm.getValue();
+    el.textContent = cm.lineCount() + ' linhas · ' + val.length + ' caracteres';
+  }
+  cm.on('change', updateStatus); updateStatus();
+  wrap.querySelectorAll(actSelector).forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.iedAct || btn.dataset.edAct;
+      if (act === 'fullscreen') { cm.setOption('fullScreen', !cm.getOption('fullScreen')); wrap.classList.toggle('fullscreen-mode'); }
+      else if (act === 'wrap') { const w = !cm.getOption('lineWrapping'); cm.setOption('lineWrapping', w); btn.classList.toggle('on', w); }
+      else if (act === 'copy') { navigator.clipboard.writeText(cm.getValue()); AdminShell.toast('Código copiado.', 'success'); }
+      else if (act === 'clear') { if (confirm('Limpar todo o código deste editor?')) cm.setValue(''); }
+      else if (act === 'format') formatCode(cm);
+      updateStatus();
+    });
+  });
+}
+function formatCode(cm) {
+  const code = cm.getValue();
+  try {
+    let parser = 'babel';
+    if (/^\s*</.test(code)) parser = 'html';
+    else if (/^\s*[.#a-zA-Z-]+\s*\{/.test(code) && !/function|var |const |let /.test(code)) parser = 'css';
+    const out = prettier.format(code, { parser: parser, plugins: prettierPlugins, printWidth: 100, tabWidth: 2 });
+    cm.setValue(out);
+    AdminShell.toast('Código formatado.', 'success');
+  } catch (e) { AdminShell.toast('Não foi possível formatar automaticamente (código pode ter erro de sintaxe).', 'error'); }
+}
+
+function openScriptModal(id) {
+  editingScriptId = id;
+  const s = id ? SCRIPTS.find(x => x.id === id) : null;
+  document.getElementById('scriptModalTitle').textContent = s ? 'Editar Script' : 'Novo Script Personalizado';
+  document.getElementById('fs_nome').value = s ? s.nome : '';
+  document.getElementById('fs_descricao').value = s ? (s.descricao || '') : '';
+  document.getElementById('fs_categoria').value = s ? s.categoria : 'essencial';
+  document.getElementById('fs_posicao').value = s ? s.posicao : 'body_close';
+  document.getElementById('fs_dispositivos').value = s ? s.dispositivos : 'todos';
+  document.getElementById('fs_estrategia').value = s ? s.estrategia : 'normal';
+  document.getElementById('fs_atraso_ms').value = s && s.atraso_ms ? s.atraso_ms : 1000;
+  document.getElementById('fs_prioridade').value = s ? s.prioridade : 'normal';
+  document.getElementById('fs_ambiente').value = s ? s.ambiente : 'producao';
+  document.getElementById('fs_paginas_modo').value = s ? s.paginas_modo : 'todas';
+  document.getElementById('fs_consent_gate').checked = !!(s && s.consentimento !== 'essencial');
+  document.getElementById('scriptEditorResults').innerHTML = '';
+  urlRules = s ? JSON.parse(JSON.stringify(s.regras_url || [])) : [];
+  renderPageChips(s ? (s.paginas || []) : []);
+  renderUrlRules();
+  updatePosicaoHint();
+  document.getElementById('fs_atraso_wrap').style.display = document.getElementById('fs_estrategia').value === 'atraso' ? '' : 'none';
+
+  document.getElementById('scriptModal').classList.add('open');
+  if (!cmScript) {
+    cmScript = CodeMirror.fromTextArea(document.getElementById('scriptCodeArea'), editorOptions('htmlmixed'));
+    wireEditorToolbar(cmScript, 'scriptEditorWrap', '[data-ed-act]', 'scriptEditorStatus');
+  }
+  cmScript.setValue(s ? s.codigo : '');
+  setTimeout(() => cmScript.refresh(), 30);
+
+  document.getElementById('btnPublicarScript').style.display = canPublish ? '' : 'none';
+}
+function closeScriptModal() { document.getElementById('scriptModal').classList.remove('open'); }
+
+function renderPageChips(selected) {
+  document.getElementById('fs_paginas_chips').innerHTML = PAGE_KEYS.map(p =>
+    `<label class="chip ${selected.includes(p.key) ? 'active' : ''}"><input type="checkbox" value="${p.key}" ${selected.includes(p.key) ? 'checked' : ''} onchange="this.parentElement.classList.toggle('active',this.checked)">${p.label}</label>`
+  ).join('');
+}
+function renderUrlRules() {
+  document.getElementById('fs_regras_url').innerHTML = urlRules.map((r, i) => `
+    <div class="url-rule-row">
+      <select onchange="urlRules[${i}].tipo=this.value">${Object.entries(URL_COND).map(([k, v]) => `<option value="${k}" ${r.tipo === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <input value="${esc(r.valor || '')}" oninput="urlRules[${i}].valor=this.value" placeholder="ex: /produto/">
+      <button type="button" class="btn btn-danger btn-sm" onclick="urlRules.splice(${i},1);renderUrlRules();">✕</button>
+    </div>`).join('');
+}
+document.getElementById('btnAddRegraUrl').addEventListener('click', () => { urlRules.push({ tipo: 'contem', valor: '' }); renderUrlRules(); });
+document.getElementById('fs_posicao').addEventListener('change', updatePosicaoHint);
+function updatePosicaoHint() { document.getElementById('posicaoHint').textContent = POSICAO_HINT[document.getElementById('fs_posicao').value]; }
+document.getElementById('fs_estrategia').addEventListener('change', function () { document.getElementById('fs_atraso_wrap').style.display = this.value === 'atraso' ? '' : 'none'; });
+
+function coletarPayloadScript() {
+  const paginas = Array.from(document.querySelectorAll('#fs_paginas_chips input:checked')).map(i => i.value);
+  return {
+    nome: document.getElementById('fs_nome').value.trim(),
+    descricao: document.getElementById('fs_descricao').value.trim() || null,
+    codigo: cmScript.getValue(),
+    categoria: document.getElementById('fs_categoria').value,
+    posicao: document.getElementById('fs_posicao').value,
+    paginas_modo: document.getElementById('fs_paginas_modo').value,
+    paginas, regras_url: urlRules.filter(r => r.valor),
+    dispositivos: document.getElementById('fs_dispositivos').value,
+    estrategia: document.getElementById('fs_estrategia').value,
+    atraso_ms: document.getElementById('fs_estrategia').value === 'atraso' ? (parseInt(document.getElementById('fs_atraso_ms').value) || 1000) : null,
+    prioridade: document.getElementById('fs_prioridade').value,
+    consentimento: document.getElementById('fs_consent_gate').checked ? document.getElementById('fs_categoria').value : 'essencial',
+    ambiente: document.getElementById('fs_ambiente').value,
+  };
+}
+
+function validarCodigo(codigo, nome, editingId) {
+  const errors = [], warnings = [];
+  if (!codigo || !codigo.trim()) errors.push('O código não pode estar vazio.');
+  const abre = (codigo.match(/<script\b/gi) || []).length, fecha = (codigo.match(/<\/script>/gi) || []).length;
+  if (abre !== fecha) errors.push('Existe uma tag <script> aberta sem o fechamento correspondente.');
+  if (/document\.write\s*\(/i.test(codigo)) warnings.push('Uso de document.write detectado — pode travar o carregamento em navegadores modernos.');
+  if (/http:\/\//i.test(codigo)) warnings.push('Encontrado um link http:// (não seguro) — prefira https://.');
+  let bal = 0; for (const ch of codigo) { if (ch === '{' || ch === '(') bal++; else if (ch === '}' || ch === ')') bal--; }
+  if (bal !== 0) warnings.push('Possível erro de sintaxe: chaves/parênteses não fecham corretamente (checagem heurística).');
+  if (nome) {
+    const dupNome = SCRIPTS.find(s => s.id !== editingId && s.nome.trim().toLowerCase() === nome.trim().toLowerCase());
+    if (dupNome) errors.push('Já existe um script chamado "' + nome + '".');
+  }
+  const dupCodigo = SCRIPTS.find(s => s.id !== editingId && s.codigo.trim() === codigo.trim());
+  if (dupCodigo) warnings.push('Já existe um script idêntico ("' + dupCodigo.nome + '").');
+  if (document.getElementById('fs_posicao') && document.getElementById('fs_posicao').value === 'head' && document.getElementById('fs_estrategia').value === 'normal' && /<script[^>]+src=/i.test(codigo) && !/async|defer/i.test(codigo)) {
+    warnings.push('Script externo no <head> sem async/defer pode deixar o site mais lento — considere mudar a estratégia de carregamento.');
+  }
+  return { errors, warnings };
+}
+function renderValidation(result) {
+  const el = document.getElementById('scriptEditorResults');
+  if (!result.errors.length && !result.warnings.length) { el.innerHTML = '<div class="ok">✓ Nenhum problema encontrado.</div>'; return; }
+  el.innerHTML = result.errors.map(e => `<div class="err">✕ ${e}</div>`).join('') + result.warnings.map(w => `<div class="warn">⚠ ${w}</div>`).join('');
+}
+
+document.getElementById('btnTestarScript').addEventListener('click', () => {
+  const payload = coletarPayloadScript();
+  renderValidation(validarCodigo(payload.codigo, payload.nome, editingScriptId));
+});
+
+document.getElementById('btnRascunhoScript').addEventListener('click', () => salvarScript('rascunho'));
+document.getElementById('btnPublicarScript').addEventListener('click', () => salvarScript('ativo'));
+
+async function salvarScript(statusAlvo) {
+  const payload = coletarPayloadScript();
+  if (!payload.nome) { AdminShell.toast('Informe o nome do script.', 'error'); return; }
+  const val = validarCodigo(payload.codigo, payload.nome, editingScriptId);
+  renderValidation(val);
+  if (val.errors.length) { AdminShell.toast('Corrija os erros antes de salvar.', 'error'); return; }
+  if (statusAlvo === 'ativo' && val.warnings.length && !confirm('Existem avisos:\n\n' + val.warnings.join('\n') + '\n\nPublicar mesmo assim?')) return;
+
+  payload.status = statusAlvo;
+  const before = editingScriptId ? SCRIPTS.find(s => s.id === editingScriptId) : null;
+  payload.versao = before ? (before.versao || 1) + 1 : 1;
+  const { data: { user } } = await window.sb.auth.getUser();
+  payload.updated_by = user ? user.id : null;
+
+  let result;
+  if (editingScriptId) result = await window.sb.from('scripts_custom').update(payload).eq('id', editingScriptId).select().single();
+  else { payload.created_by = user ? user.id : null; result = await window.sb.from('scripts_custom').insert(payload).select().single(); }
+
+  if (result.error) { AdminShell.toast('Erro: ' + result.error.message, 'error'); return; }
+  await logHistorico('script', result.data.id, editingScriptId ? 'editado' : 'criado', before, result.data);
+  AdminShell.toast(statusAlvo === 'ativo' ? 'Script publicado!' : 'Rascunho salvo.', 'success');
+  closeScriptModal();
+  await loadAll();
+}
+
+window.setScriptStatus = async function (id, status) {
+  const before = SCRIPTS.find(s => s.id === id);
+  const { data, error } = await window.sb.from('scripts_custom').update({ status }).eq('id', id).select().single();
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico('script', id, status === 'ativo' ? 'ativado' : 'desativado', before, data);
+  await loadAll();
+};
+window.duplicarScript = async function (id) {
+  const s = SCRIPTS.find(x => x.id === id);
+  const { data: { user } } = await window.sb.auth.getUser();
+  const clone = Object.assign({}, s);
+  delete clone.id; delete clone.created_at; delete clone.updated_at;
+  clone.nome = s.nome + ' (cópia)'; clone.status = 'rascunho'; clone.versao = 1; clone.created_by = user ? user.id : null; clone.updated_by = user ? user.id : null;
+  const { data, error } = await window.sb.from('scripts_custom').insert(clone).select().single();
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico('script', data.id, 'criado', null, data);
+  AdminShell.toast('Script duplicado como rascunho.', 'success');
+  await loadAll();
+};
+window.excluirScript = async function (id) {
+  if (!confirm('Excluir este script personalizado?')) return;
+  const before = SCRIPTS.find(s => s.id === id);
+  const { error } = await window.sb.from('scripts_custom').delete().eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico('script', id, 'excluido', before, null);
+  await loadAll();
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   DIAGNÓSTICO — usa um iframe oculto apontando pro site publicado
+   ════════════════════════════════════════════════════════════════════ */
+function runDiagnostics() {
+  return new Promise(resolve => {
+    if (location.protocol === 'file:') {
+      resolve({ detectado: {}, totalInjetados: 0, duplicados: [], recursos: [], bloqueadoPorFile: true });
+      return;
+    }
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:-9999px;';
+    iframe.src = 'alfa-replica.html?alfa_admin_test=1';
+    let done = false;
+    function finish() {
+      if (done) return; done = true;
+      const result = { detectado: {}, totalInjetados: 0, duplicados: [], recursos: [], bloqueadoPorFile: false };
+      try {
+        const w = iframe.contentWindow;
+        result.detectado = {
+          ga4_gtm: typeof w.gtag === 'function' || typeof w.dataLayer !== 'undefined',
+          meta_pixel: typeof w.fbq === 'function',
+          tiktok_pixel: typeof w.ttq !== 'undefined',
+          clarity: typeof w.clarity === 'function',
+          hotjar: typeof w.hj === 'function',
+        };
+        if (w.AlfaScripts && w.AlfaScripts.diagnostics) {
+          const diag = w.AlfaScripts.diagnostics();
+          result.totalInjetados = diag.totalInjetados; result.duplicados = diag.duplicados; result.recursos = diag.recursos;
+        }
+      } catch (e) { console.error(e); result.bloqueadoPorFile = true; }
+      document.body.removeChild(iframe);
+      resolve(result);
+    }
+    iframe.onload = function () {
+      // Espera o script-engine.js do iframe terminar de verdade (marca
+      // window.__alfaReady) em vez de confiar num tempo fixo — evita falso
+      // "não detectado" quando a rede está mais lenta.
+      const start = Date.now();
+      const poll = setInterval(() => {
+        let ready = false;
+        try { ready = !!(iframe.contentWindow && iframe.contentWindow.__alfaReady); } catch (e) {}
+        if (ready || Date.now() - start > 6000) { clearInterval(poll); setTimeout(finish, 150); }
+      }, 200);
+    };
+    document.body.appendChild(iframe);
+  });
+}
+
+window.testarIntegracao = async function (id) {
+  if (!id) return;
+  AdminShell.toast('Testando... aguarde alguns segundos.', 'success');
+  const row = INTEGRACOES.find(i => i.id === id);
+  const result = await runDiagnostics();
+  if (result.bloqueadoPorFile) {
+    AdminShell.toast('Não dá pra testar com o site aberto direto do arquivo (file://) — isso só funciona com o site publicado num endereço http(s)://. A configuração em si já foi salva normalmente.', 'error');
+    return;
+  }
+  const keyMap = { ga4: 'ga4_gtm', gtm: 'ga4_gtm', google_ads: 'ga4_gtm', meta_pixel: 'meta_pixel', tiktok_pixel: 'tiktok_pixel', clarity: 'clarity', hotjar: 'hotjar' };
+  const key = keyMap[row.tipo];
+  const detectado = key ? result.detectado[key] : result.totalInjetados > 0;
+  const novasConfiguracoes = Object.assign({}, row.configuracoes, { ultimo_teste: { detectado, ts: new Date().toISOString() } });
+  await window.sb.from('integracoes').update({ configuracoes: novasConfiguracoes }).eq('id', id);
+  AdminShell.toast(detectado ? 'Integração detectada no site ✓' : 'Integração não encontrada no site — confira o ID.', detectado ? 'success' : 'error');
+  await loadAll();
+};
+
+document.getElementById('btnTestarTudo').addEventListener('click', async () => {
+  document.querySelector('[data-tab=diagnostico]').click();
+  await runDiagAndRender();
+});
+document.getElementById('btnRunDiag').addEventListener('click', runDiagAndRender);
+
+async function runDiagAndRender() {
+  document.getElementById('diagResult').innerHTML = '<p class="scr-desc">Rodando diagnóstico...</p>';
+  const r = await runDiagnostics();
+  if (r.bloqueadoPorFile) {
+    document.getElementById('diagResult').innerHTML = '<div class="warn-banner">Este diagnóstico precisa que o site esteja publicado num endereço http(s):// — não funciona com o site aberto direto do arquivo (file://), porque o navegador bloqueia por segurança. Assim que o site estiver no ar (ex: Vercel), volte aqui pra rodar o diagnóstico de verdade.</div>';
+    return;
+  }
+  localStorage.setItem('alfa_last_diag', JSON.stringify({ ts: Date.now() }));
+  const items = [
+    ['Google Analytics / GTM', r.detectado.ga4_gtm], ['Meta Pixel', r.detectado.meta_pixel],
+    ['TikTok Pixel', r.detectado.tiktok_pixel], ['Microsoft Clarity', r.detectado.clarity], ['Hotjar', r.detectado.hotjar],
+  ];
+  let html = '<div class="diag-grid">' + items.map(([lbl, ok]) =>
+    `<div class="diag-item"><span>${lbl}</span><span class="status-pill ${ok ? 'green' : 'gray'}">${ok ? 'Detectado' : 'Não detectado'}</span></div>`
+  ).join('') + `<div class="diag-item"><span>Scripts carregados</span><span class="status-pill blue">${r.totalInjetados}</span></div>
+  <div class="diag-item"><span>Scripts duplicados</span><span class="status-pill ${r.duplicados.length ? 'red' : 'green'}">${r.duplicados.length}</span></div></div>`;
+  if (r.recursos.length) {
+    html += '<div class="card"><div class="card-title">Estimativa de tempo de carregamento</div>' +
+      r.recursos.map(x => `<div class="hbar-row"><span class="hbar-lbl" title="${esc(x.nome)}">${esc(x.nome.split('/').pop())}</span><span class="hbar-val">${x.duracaoMs} ms</span></div>`).join('') + '</div>';
+  }
+  html += `<p class="scr-desc">Último diagnóstico: ${fmtWhen(new Date().toISOString())}</p>`;
+  document.getElementById('diagResult').innerHTML = html;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   HISTÓRICO
+   ════════════════════════════════════════════════════════════════════ */
+function renderHistorico() {
+  const tbody = document.getElementById('historicoTbody');
+  if (!HISTORICO.length) { tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Nenhuma alteração registrada ainda.</td></tr>'; return; }
+  const ACAO_LABEL = { criado: 'Criado', editado: 'Editado', ativado: 'Ativado', desativado: 'Desativado', excluido: 'Excluído', restaurado: 'Restaurado' };
+  tbody.innerHTML = HISTORICO.map((h, i) => `
+    <tr>
+      <td>${fmtWhen(h.created_at)}</td>
+      <td>${h.entidade === 'integracao' ? 'Integração' : 'Script'} #${h.entidade_id}</td>
+      <td><span class="status-pill blue">${ACAO_LABEL[h.acao] || h.acao}</span></td>
+      <td>${who(h.usuario_id)}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="abrirDiff(${i})">Comparar</button></td>
+    </tr>`).join('');
+}
+window.abrirDiff = function (i) {
+  histCurrent = HISTORICO[i];
+  document.getElementById('histAntes').textContent = histCurrent.dados_anteriores ? JSON.stringify(histCurrent.dados_anteriores, null, 2) : '(nada)';
+  document.getElementById('histDepois').textContent = histCurrent.dados_novos ? JSON.stringify(histCurrent.dados_novos, null, 2) : '(excluído)';
+  document.getElementById('btnRestaurar').style.display = histCurrent.dados_anteriores ? '' : 'none';
+  document.getElementById('histModal').classList.add('open');
+};
+document.getElementById('btnRestaurar').addEventListener('click', async () => {
+  if (!histCurrent || !histCurrent.dados_anteriores) return;
+  const tabela = histCurrent.entidade === 'integracao' ? 'integracoes' : 'scripts_custom';
+  const dados = Object.assign({}, histCurrent.dados_anteriores);
+  delete dados.id; delete dados.created_at; delete dados.updated_at;
+  const { data, error } = await window.sb.from(tabela).update(dados).eq('id', histCurrent.entidade_id).select().single();
+  if (error) { AdminShell.toast('Erro ao restaurar: ' + error.message, 'error'); return; }
+  await logHistorico(histCurrent.entidade, histCurrent.entidade_id, 'restaurado', histCurrent.dados_novos, data);
+  AdminShell.toast('Versão restaurada.', 'success');
+  document.getElementById('histModal').classList.remove('open');
+  await loadAll(); await loadHistorico();
+});
+
+async function logHistorico(entidade, entidadeId, acao, antes, depois) {
+  const { data: { user } } = await window.sb.auth.getUser();
+  await window.sb.from('scripts_historico').insert({ entidade, entidade_id: entidadeId, acao, dados_anteriores: antes || null, dados_novos: depois || null, usuario_id: user ? user.id : null });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   CONFIGURAÇÕES GERAIS
+   ════════════════════════════════════════════════════════════════════ */
+const CFG_DEFS = [
+  { key: 'custom_scripts_enabled', label: 'Scripts personalizados ativos', desc: 'Chave geral — desligar aqui pausa todos os scripts personalizados no site (integrações continuam).' },
+  { key: 'pause_marketing', label: 'Pausar scripts de marketing', desc: 'Bloqueia temporariamente Meta Pixel, TikTok Pixel, Pinterest Tag e Google Ads.' },
+  { key: 'pause_analytics', label: 'Pausar scripts de analytics', desc: 'Bloqueia temporariamente GA4, GTM, Clarity e Hotjar.' },
+  { key: 'allow_dev_scripts', label: 'Permitir scripts em desenvolvimento', desc: 'Libera scripts marcados como "Desenvolvimento" quando o site é acessado via localhost.' },
+  { key: 'debug_logs', label: 'Ativar logs de depuração', desc: 'Mostra avisos extras no console do navegador sobre o que está sendo injetado.' },
+  { key: 'block_during_maintenance', label: 'Bloquear scripts durante manutenção', desc: 'Impede QUALQUER script (inclusive integrações) de rodar no site público.' },
+];
+function renderConfig() {
+  document.getElementById('cfgToggles').innerHTML = CFG_DEFS.map(c => `
+    <div class="cfg-toggle-row">
+      <div class="cfg-toggle-txt"><b>${c.label}</b><div>${c.desc}</div></div>
+      <label class="switch"><input type="checkbox" id="cfg_${c.key}" ${SCRIPTS_CONFIG[c.key] ? 'checked' : ''}><span class="switch-track"></span></label>
+    </div>`).join('');
+}
+document.getElementById('btnSalvarCfg').addEventListener('click', async () => {
+  const patch = {};
+  CFG_DEFS.forEach(c => { patch[c.key] = document.getElementById('cfg_' + c.key).checked; });
+  const { error } = await window.sb.from('site_settings').update({ scripts_config: patch }).eq('id', 1);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  SCRIPTS_CONFIG = patch;
+  AdminShell.toast('Configurações salvas.', 'success');
+});
+document.getElementById('btnEmergencia').addEventListener('click', async () => {
+  if (!confirm('Desativar TODOS os scripts personalizados agora? Nenhuma configuração é apagada — você pode religar depois.')) return;
+  const patch = Object.assign({}, SCRIPTS_CONFIG, { custom_scripts_enabled: false });
+  const { error } = await window.sb.from('site_settings').update({ scripts_config: patch }).eq('id', 1);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  SCRIPTS_CONFIG = patch;
+  renderConfig();
+  AdminShell.toast('Scripts personalizados desativados.', 'success');
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   HELPERS
+   ════════════════════════════════════════════════════════════════════ */
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+/* ════════════════════════════════════════════════════════════════════
+   INIT
+   ════════════════════════════════════════════════════════════════════ */
+(async function () {
+  const session = await AdminShell.init('aparencia-scripts');
+  if (!session) return;
+  canView = AdminShell.can('integracoes.visualizar');
+  if (!canView) { document.querySelector('.admin-content').innerHTML = '<div class="table-empty">Você não tem permissão pra ver esta página.</div>'; return; }
+  canEditInteg = AdminShell.can('integracoes.editar');
+  canAddScript = AdminShell.can('scripts.adicionar');
+  canPublish = AdminShell.can('scripts.publicar');
+  canDelete = AdminShell.can('scripts.excluir');
+  canHistory = AdminShell.can('scripts.historico');
+
+  document.getElementById('btnNovaIntegracao').style.display = canEditInteg ? '' : 'none';
+  document.getElementById('btnNovoScript').style.display = canAddScript ? '' : 'none';
+  document.querySelector('[data-tab=historico]').style.display = canHistory ? '' : 'none';
+
+  await loadAll();
+})();
+</script>
+</body>
+</html>

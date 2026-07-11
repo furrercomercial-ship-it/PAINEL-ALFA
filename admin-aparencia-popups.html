@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Popups — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Aparência — Popups</div>
+      <div class="admin-topbar-actions"><button class="btn btn-primary" id="newBtn">+ Novo Popup</button></div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Título</th><th>Tipo</th><th>Frequência</th><th>Status</th><th></th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="modalTitle">Novo Popup</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field-row">
+      <div class="field"><label>Tipo *</label>
+        <select id="f_tipo">
+          <option value="cupom">Cupom</option>
+          <option value="newsletter">Newsletter</option>
+          <option value="promocao">Promoção</option>
+          <option value="aviso">Aviso</option>
+        </select>
+      </div>
+      <div class="field"><label>Frequência de exibição</label>
+        <select id="f_frequencia">
+          <option value="sempre">Toda vez que abrir o site</option>
+          <option value="uma_vez_sessao">Uma vez por visita</option>
+          <option value="uma_vez_dispositivo">Uma vez por dispositivo (não mostra de novo)</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Título</label><input id="f_titulo"></div>
+    <div class="field"><label>Mensagem</label><textarea id="f_mensagem"></textarea></div>
+    <div class="field"><label>Imagem (opcional)</label><div id="uploadImg"></div></div>
+    <div class="field-row">
+      <div class="field"><label>Texto do botão</label><input id="f_cta_label" placeholder="Aproveitar"></div>
+      <div class="field"><label>Link do botão</label><input id="f_cta_url"></div>
+    </div>
+    <div class="field"><label>Código do cupom (se aplicável — só exibido como texto, não valida no checkout)</label><input id="f_cupom_codigo" placeholder="BEMVINDO10"></div>
+    <div class="field-row">
+      <div class="field"><label>Início (opcional)</label><input type="date" id="f_data_inicio"></div>
+      <div class="field"><label>Fim (opcional)</label><input type="date" id="f_data_fim"></div>
+    </div>
+    <label class="chk-row"><input type="checkbox" id="f_ativo" checked> Ativo</label>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-upload.js"></script>
+<script>
+let POPUPS = [];
+let editingId = null;
+let currentImg = '';
+const TIPO_LABELS = { cupom: 'Cupom', newsletter: 'Newsletter', promocao: 'Promoção', aviso: 'Aviso' };
+const FREQ_LABELS = { sempre: 'Sempre', uma_vez_sessao: 'Uma vez/visita', uma_vez_dispositivo: 'Uma vez/dispositivo' };
+
+async function load() {
+  const { data } = await window.sb.from('popups').select('*').order('ordem');
+  POPUPS = data || [];
+  render();
+}
+
+function render() {
+  const tb = document.getElementById('tbody');
+  if (!POPUPS.length) { tb.innerHTML = '<tr><td colspan="5" class="table-empty">Nenhum popup cadastrado.</td></tr>'; return; }
+  tb.innerHTML = POPUPS.map(p => `
+    <tr>
+      <td class="strong">${p.titulo || '(sem título)'}</td>
+      <td>${TIPO_LABELS[p.tipo]}</td>
+      <td>${FREQ_LABELS[p.frequencia] || p.frequencia}</td>
+      <td>${p.ativo ? '<span class="status-pill green">Ativo</span>' : '<span class="status-pill gray">Inativo</span>'}</td>
+      <td><div class="table-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openEdit('${p.id}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="remove('${p.id}')">Excluir</button>
+      </div></td>
+    </tr>`).join('');
+}
+
+function openModal() { document.getElementById('modal').classList.add('open'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+document.getElementById('newBtn').addEventListener('click', () => {
+  editingId = null; currentImg = '';
+  document.getElementById('modalTitle').textContent = 'Novo Popup';
+  ['titulo','mensagem','cta_label','cta_url','cupom_codigo','data_inicio','data_fim'].forEach(f => document.getElementById('f_' + f).value = '');
+  document.getElementById('f_tipo').value = 'aviso';
+  document.getElementById('f_frequencia').value = 'uma_vez_sessao';
+  document.getElementById('f_ativo').checked = true;
+  AdminUpload.mountField(document.getElementById('uploadImg'), 'popups', '', url => currentImg = url);
+  openModal();
+});
+
+window.openEdit = function (id) {
+  const p = POPUPS.find(x => x.id === id);
+  if (!p) return;
+  editingId = id; currentImg = p.imagem_url || '';
+  document.getElementById('modalTitle').textContent = 'Editar Popup';
+  document.getElementById('f_tipo').value = p.tipo;
+  document.getElementById('f_frequencia').value = p.frequencia;
+  document.getElementById('f_titulo').value = p.titulo || '';
+  document.getElementById('f_mensagem').value = p.mensagem || '';
+  document.getElementById('f_cta_label').value = p.cta_label || '';
+  document.getElementById('f_cta_url').value = p.cta_url || '';
+  document.getElementById('f_cupom_codigo').value = p.cupom_codigo || '';
+  document.getElementById('f_data_inicio').value = p.data_inicio ? p.data_inicio.slice(0,10) : '';
+  document.getElementById('f_data_fim').value = p.data_fim ? p.data_fim.slice(0,10) : '';
+  document.getElementById('f_ativo').checked = !!p.ativo;
+  AdminUpload.mountField(document.getElementById('uploadImg'), 'popups', p.imagem_url, url => currentImg = url);
+  openModal();
+};
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const payload = {
+    tipo: document.getElementById('f_tipo').value,
+    frequencia: document.getElementById('f_frequencia').value,
+    titulo: document.getElementById('f_titulo').value.trim() || null,
+    mensagem: document.getElementById('f_mensagem').value.trim() || null,
+    imagem_url: currentImg || null,
+    cta_label: document.getElementById('f_cta_label').value.trim() || null,
+    cta_url: document.getElementById('f_cta_url').value.trim() || null,
+    cupom_codigo: document.getElementById('f_cupom_codigo').value.trim() || null,
+    data_inicio: document.getElementById('f_data_inicio').value || null,
+    data_fim: document.getElementById('f_data_fim').value || null,
+    ativo: document.getElementById('f_ativo').checked,
+  };
+  let error;
+  if (editingId) {
+    ({ error } = await window.sb.from('popups').update(payload).eq('id', editingId));
+  } else {
+    payload.ordem = POPUPS.length;
+    ({ error } = await window.sb.from('popups').insert(payload));
+  }
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Popup salvo com sucesso!', 'success');
+  closeModal();
+  load();
+});
+
+window.remove = async function (id) {
+  if (!confirm('Excluir este popup?')) return;
+  await window.sb.from('popups').delete().eq('id', id);
+  load();
+};
+
+(async function () {
+  const session = await AdminShell.init('aparencia-popups');
+  if (!session) return;
+  await load();
+})();
+</script>
+</body>
+</html>

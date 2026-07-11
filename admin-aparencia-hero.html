@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hero — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.slide-card{background:var(--bg-card);border:1px solid var(--border-color);padding:16px 18px;margin-bottom:12px;display:grid;grid-template-columns:110px 1fr auto;gap:16px;align-items:center;}
+.slide-thumb{width:110px;height:62px;background:var(--bg-main);overflow:hidden;}
+.slide-thumb img{width:100%;height:100%;object-fit:cover;}
+.slide-info-title{font-weight:700;font-size:13px;margin-bottom:3px;}
+.slide-info-sub{font-size:11.5px;color:var(--text-muted);}
+.ord-btns{display:flex;flex-direction:column;gap:1px;}
+.ord-btns button{background:transparent;border:1px solid var(--border-color);color:var(--text-muted);cursor:pointer;width:20px;height:16px;font-size:9px;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Aparência — Hero / Banner Principal</div>
+      <div class="admin-topbar-actions"><button class="btn btn-primary" id="newBtn">+ Novo Slide</button></div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <div id="slidesList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="slideModal">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="modalTitle">Novo Slide</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Imagem *</label><div id="uploadSlideImg"></div></div>
+    <div class="field"><label>Título (opcional)</label><input id="f_titulo"></div>
+    <div class="field"><label>Subtítulo (opcional)</label><input id="f_subtitulo"></div>
+    <div class="field-row">
+      <div class="field"><label>Texto do botão</label><input id="f_cta_label" placeholder="Ver ofertas"></div>
+      <div class="field"><label>Link do botão</label><input id="f_cta_url" placeholder="categoria.html?cat=promocoes"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label class="chk-row" style="margin-top:8px;"><input type="checkbox" id="f_overlay_ativo"> Escurecer imagem (destacar texto)</label></div>
+      <div class="field"><label>Opacidade do escurecido (0 a 1)</label><input type="number" step="0.05" min="0" max="1" id="f_overlay_opacidade"></div>
+    </div>
+    <label class="chk-row"><input type="checkbox" id="f_ativo" checked> Ativo</label>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-upload.js"></script>
+<script>
+let SLIDES = [];
+let editingId = null;
+let currentImg = '';
+
+async function load() {
+  const { data } = await window.sb.from('hero_slides').select('*').order('ordem');
+  SLIDES = data || [];
+  render();
+}
+
+function render() {
+  const el = document.getElementById('slidesList');
+  if (!SLIDES.length) { el.innerHTML = '<div class="table-empty">Nenhum slide cadastrado. Clique em "+ Novo Slide".</div>'; return; }
+  el.innerHTML = SLIDES.map((s, i) => `
+    <div class="slide-card">
+      <div class="slide-thumb"><img src="${s.imagem_url}" alt=""></div>
+      <div>
+        <div class="slide-info-title">${s.titulo || '(sem título)'} ${s.ativo ? '' : '<span class="status-pill gray">Inativo</span>'}</div>
+        <div class="slide-info-sub">${s.subtitulo || ''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="ord-btns">
+          <button onclick="move(${s.id},-1)" ${i===0?'disabled':''}>▲</button>
+          <button onclick="move(${s.id},1)" ${i===SLIDES.length-1?'disabled':''}>▼</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openEdit(${s.id})">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="remove(${s.id})">Excluir</button>
+      </div>
+    </div>`).join('');
+}
+
+function openModal() { document.getElementById('slideModal').classList.add('open'); }
+function closeModal() { document.getElementById('slideModal').classList.remove('open'); }
+
+document.getElementById('newBtn').addEventListener('click', () => {
+  editingId = null; currentImg = '';
+  document.getElementById('modalTitle').textContent = 'Novo Slide';
+  ['titulo','subtitulo','cta_label','cta_url'].forEach(f => document.getElementById('f_' + f).value = '');
+  document.getElementById('f_overlay_ativo').checked = false;
+  document.getElementById('f_overlay_opacidade').value = 0.35;
+  document.getElementById('f_ativo').checked = true;
+  AdminUpload.mountField(document.getElementById('uploadSlideImg'), 'hero', '', url => currentImg = url);
+  openModal();
+});
+
+window.openEdit = function (id) {
+  const s = SLIDES.find(x => x.id === id);
+  if (!s) return;
+  editingId = id; currentImg = s.imagem_url;
+  document.getElementById('modalTitle').textContent = 'Editar Slide';
+  document.getElementById('f_titulo').value = s.titulo || '';
+  document.getElementById('f_subtitulo').value = s.subtitulo || '';
+  document.getElementById('f_cta_label').value = s.cta_label || '';
+  document.getElementById('f_cta_url').value = s.cta_url || '';
+  document.getElementById('f_overlay_ativo').checked = !!s.overlay_ativo;
+  document.getElementById('f_overlay_opacidade').value = s.overlay_opacidade;
+  document.getElementById('f_ativo').checked = !!s.ativo;
+  AdminUpload.mountField(document.getElementById('uploadSlideImg'), 'hero', s.imagem_url, url => currentImg = url);
+  openModal();
+};
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  if (!currentImg) { AdminShell.toast('Escolha uma imagem.', 'error'); return; }
+  const payload = {
+    imagem_url: currentImg,
+    titulo: document.getElementById('f_titulo').value.trim() || null,
+    subtitulo: document.getElementById('f_subtitulo').value.trim() || null,
+    cta_label: document.getElementById('f_cta_label').value.trim() || null,
+    cta_url: document.getElementById('f_cta_url').value.trim() || null,
+    overlay_ativo: document.getElementById('f_overlay_ativo').checked,
+    overlay_opacidade: parseFloat(document.getElementById('f_overlay_opacidade').value) || 0.35,
+    ativo: document.getElementById('f_ativo').checked,
+  };
+  let error;
+  if (editingId) {
+    ({ error } = await window.sb.from('hero_slides').update(payload).eq('id', editingId));
+  } else {
+    payload.ordem = SLIDES.length;
+    ({ error } = await window.sb.from('hero_slides').insert(payload));
+  }
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Slide salvo com sucesso!', 'success');
+  closeModal();
+  load();
+});
+
+window.remove = async function (id) {
+  if (!confirm('Excluir este slide?')) return;
+  await window.sb.from('hero_slides').delete().eq('id', id);
+  load();
+};
+
+window.move = async function (id, dir) {
+  const idx = SLIDES.findIndex(s => s.id === id);
+  const swap = SLIDES[idx + dir];
+  if (!swap) return;
+  await Promise.all([
+    window.sb.from('hero_slides').update({ ordem: swap.ordem }).eq('id', SLIDES[idx].id),
+    window.sb.from('hero_slides').update({ ordem: SLIDES[idx].ordem }).eq('id', swap.id),
+  ]);
+  load();
+};
+
+(async function () {
+  const session = await AdminShell.init('aparencia-hero');
+  if (!session) return;
+  await load();
+})();
+</script>
+</body>
+</html>

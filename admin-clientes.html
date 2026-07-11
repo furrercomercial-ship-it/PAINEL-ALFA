@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clientes — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.detail-section{margin-bottom:18px;}
+.detail-section-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px;}
+.detail-line{font-size:13px;color:var(--text-secondary);margin-bottom:3px;}
+.mini-order{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-bottom:1px solid var(--border-color);}
+.mini-order:last-child{border-bottom:none;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Clientes</div></div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="search" id="searchInp" class="search-box" placeholder="Buscar por nome ou e-mail...">
+        </div>
+        <div id="cliCount" style="font-size:12.5px;color:var(--text-muted);"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Cliente</th><th>Telefone</th><th>Pedidos</th><th>Total Gasto</th><th>Última Compra</th><th>Status</th><th></th></tr></thead>
+          <tbody id="cliTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cliModal">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="cliModalTitle">Cliente</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div id="cliDetail"></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+      <button class="btn btn-danger" id="blockBtn">Bloquear</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+let CLIENTS = [];
+let currentDetailId = null;
+let canEdit = false;
+
+function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+function fmtDate(iso) { return new Date(iso).toLocaleDateString('pt-BR'); }
+
+async function loadClients() {
+  const [{ data: profiles }, { data: orders }] = await Promise.all([
+    window.sb.from('profiles').select('id,full_name,cpf,phone,is_blocked,created_at').eq('role', 'cliente').order('created_at', { ascending: false }),
+    window.sb.from('orders').select('id,user_id,total,status,created_at,order_number'),
+  ]);
+
+  CLIENTS = (profiles || []).map(p => {
+    const myOrders = (orders || []).filter(o => o.user_id === p.id);
+    const spent = myOrders.filter(o => o.status !== 'cancelado').reduce((s, o) => s + Number(o.total), 0);
+    const last = myOrders.length ? myOrders.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b) : null;
+    return { ...p, orderCount: myOrders.length, spent, lastPurchase: last ? last.created_at : null, orders: myOrders };
+  });
+  renderTable();
+}
+
+function renderTable() {
+  const q = document.getElementById('searchInp').value.trim().toLowerCase();
+  let list = CLIENTS.filter(c => !q || (c.full_name || '').toLowerCase().includes(q));
+  document.getElementById('cliCount').textContent = list.length + ' cliente' + (list.length !== 1 ? 's' : '');
+  const tbody = document.getElementById('cliTbody');
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhum cliente encontrado.</td></tr>'; return; }
+  tbody.innerHTML = list.map(c => `
+    <tr>
+      <td class="strong">${c.full_name || '—'}</td>
+      <td>${c.phone || '—'}</td>
+      <td>${c.orderCount}</td>
+      <td class="strong">${fmtBRL(c.spent)}</td>
+      <td>${c.lastPurchase ? fmtDate(c.lastPurchase) : '—'}</td>
+      <td>${c.is_blocked ? '<span class="status-pill red">Bloqueado</span>' : '<span class="status-pill green">Ativo</span>'}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openDetail('${c.id}')">Ver detalhes</button></td>
+    </tr>`).join('');
+}
+
+window.openDetail = function (id) {
+  const c = CLIENTS.find(x => x.id === id);
+  if (!c) return;
+  currentDetailId = id;
+  document.getElementById('cliModalTitle').textContent = c.full_name || 'Cliente';
+  document.getElementById('cliDetail').innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Dados</div>
+      <div class="detail-line">CPF: ${c.cpf || '—'}</div>
+      <div class="detail-line">Telefone: ${c.phone || '—'}</div>
+      <div class="detail-line">Cliente desde: ${fmtDate(c.created_at)}</div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Resumo</div>
+      <div class="detail-line">${c.orderCount} pedido${c.orderCount !== 1 ? 's' : ''} · Total gasto: ${fmtBRL(c.spent)}</div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Histórico de Pedidos</div>
+      ${c.orders.length ? c.orders.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).map(o =>
+        `<div class="mini-order"><span>#${o.order_number || o.id} · ${fmtDate(o.created_at)}</span><span>${fmtBRL(o.total)}</span></div>`
+      ).join('') : '<div class="detail-line">Nenhum pedido ainda.</div>'}
+    </div>`;
+
+  const blockBtn = document.getElementById('blockBtn');
+  blockBtn.textContent = c.is_blocked ? 'Desbloquear' : 'Bloquear';
+  blockBtn.style.display = canEdit ? 'inline-flex' : 'none';
+  document.getElementById('cliModal').classList.add('open');
+};
+
+document.getElementById('blockBtn').addEventListener('click', async () => {
+  const c = CLIENTS.find(x => x.id === currentDetailId);
+  if (!c) return;
+  const { error } = await window.sb.from('profiles').update({ is_blocked: !c.is_blocked }).eq('id', c.id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  closeModal();
+  loadClients();
+});
+
+function closeModal() { document.getElementById('cliModal').classList.remove('open'); }
+document.getElementById('searchInp').addEventListener('input', renderTable);
+
+(async function () {
+  const session = await AdminShell.init('clientes');
+  if (!session) return;
+  canEdit = AdminShell.can('clientes.editar');
+  await loadClients();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Identidade Visual — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Aparência — Identidade Visual</div></div>
+    <div class="admin-content" style="max-width:760px;">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">Logo e Favicon</div>
+        <div class="field-row">
+          <div class="field"><label>Logo — Modo Escuro</label><div id="uploadLogoDark"></div></div>
+          <div class="field"><label>Logo — Modo Claro</label><div id="uploadLogoLight"></div></div>
+        </div>
+        <div class="field"><label>Favicon</label><div id="uploadFavicon"></div></div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">Loja</div>
+        <div class="field"><label>Nome da loja</label><input id="f_site_name"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">Contato e Redes Sociais</div>
+        <div class="field-row">
+          <div class="field"><label>WhatsApp (só números, com DDI)</label><input id="f_whatsapp_number" placeholder="5565999999999"></div>
+          <div class="field"><label>E-mail de contato</label><input id="f_contact_email"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Telefone</label><input id="f_contact_phone"></div>
+          <div class="field"><label>Horário de atendimento</label><input id="f_business_hours" placeholder="Seg a Sex, 8h às 18h"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Instagram (URL)</label><input id="f_instagram_url"></div>
+          <div class="field"><label>Facebook (URL)</label><input id="f_facebook_url"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>TikTok (URL)</label><input id="f_tiktok_url"></div>
+          <div class="field"><label>YouTube (URL)</label><input id="f_youtube_url"></div>
+        </div>
+        <div class="field"><label>LinkedIn (URL)</label><input id="f_linkedin_url"></div>
+      </div>
+
+      <button class="btn btn-primary" id="saveBtn">Salvar Alterações</button>
+      <span id="saveMsg" style="margin-left:12px;font-size:12.5px;color:var(--success);display:none;">Salvo!</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-upload.js"></script>
+<script>
+let SETTINGS = null;
+const FIELDS = ['site_name','whatsapp_number','contact_email','contact_phone','business_hours','instagram_url','facebook_url','tiktok_url','youtube_url','linkedin_url'];
+
+async function load() {
+  const { data } = await window.sb.from('site_settings').select('*').eq('id', 1).single();
+  SETTINGS = data || {};
+  FIELDS.forEach(f => { const el = document.getElementById('f_' + f); if (el) el.value = SETTINGS[f] || ''; });
+
+  AdminUpload.mountField(document.getElementById('uploadLogoDark'), 'logos', SETTINGS.logo_dark_url, url => SETTINGS.logo_dark_url = url);
+  AdminUpload.mountField(document.getElementById('uploadLogoLight'), 'logos', SETTINGS.logo_light_url, url => SETTINGS.logo_light_url = url);
+  AdminUpload.mountField(document.getElementById('uploadFavicon'), 'favicon', SETTINGS.favicon_url, url => SETTINGS.favicon_url = url);
+}
+
+async function save() {
+  const payload = {};
+  FIELDS.forEach(f => { payload[f] = document.getElementById('f_' + f).value.trim() || null; });
+  payload.logo_dark_url = SETTINGS.logo_dark_url || null;
+  payload.logo_light_url = SETTINGS.logo_light_url || null;
+  payload.favicon_url = SETTINGS.favicon_url || null;
+
+  const { error } = await window.sb.from('site_settings').update(payload).eq('id', 1);
+  if (error) { AdminShell.toast('Erro ao salvar: ' + error.message, 'error'); return; }
+  const msg = document.getElementById('saveMsg');
+  msg.style.display = 'inline';
+  setTimeout(() => msg.style.display = 'none', 2200);
+}
+
+document.getElementById('saveBtn').addEventListener('click', save);
+
+(async function () {
+  const session = await AdminShell.init('aparencia-identidade');
+  if (!session) return;
+  await load();
+})();
+</script>
+</body>
+</html>

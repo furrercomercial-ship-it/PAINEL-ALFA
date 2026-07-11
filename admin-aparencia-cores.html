@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Design System — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.ds-layout{display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start;}
+@media(max-width:1150px){.ds-layout{grid-template-columns:1fr;}}
+.ds-fields{max-height:calc(100vh - 220px);overflow-y:auto;padding-right:6px;}
+.mode-tabs{display:flex;gap:8px;margin-bottom:14px;}
+.mode-tabs button{padding:8px 16px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:12px;font-weight:700;cursor:pointer;border-radius:var(--radius-sm);}
+.mode-tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.ds-group{border:1px solid var(--border-color);border-radius:var(--radius-sm);margin-bottom:10px;background:var(--bg-card);}
+.ds-group summary{padding:11px 14px;font-size:12.5px;font-weight:800;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;}
+.ds-group summary::-webkit-details-marker{display:none;}
+.ds-group summary::after{content:'+';font-size:16px;color:var(--text-muted);}
+.ds-group[open] summary::after{content:'−';}
+.ds-group-body{padding:2px 14px 10px;}
+.color-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-color);}
+.color-row:last-child{border-bottom:none;}
+.color-row label{font-size:12px;color:var(--text-secondary);}
+.color-row-inputs{display:flex;align-items:center;gap:6px;}
+.color-row input[type=color]{width:32px;height:28px;border:1px solid var(--border-color);background:transparent;cursor:pointer;padding:1px;border-radius:4px;}
+.color-row input[type=text]{width:84px;font-size:11px;padding:5px 6px;border:1px solid var(--border-color);background:var(--bg-main);color:var(--text-main);border-radius:4px;}
+.typo-row{display:grid;grid-template-columns:90px repeat(4,1fr);gap:6px;align-items:center;padding:6px 0;font-size:11px;}
+.typo-row input,.typo-row select{width:100%;font-size:11px;padding:5px 4px;border:1px solid var(--border-color);background:var(--bg-main);color:var(--text-main);border-radius:4px;}
+.typo-hdr{display:grid;grid-template-columns:90px repeat(4,1fr);gap:6px;font-size:9.5px;text-transform:uppercase;color:var(--text-muted);font-weight:800;margin-bottom:4px;}
+.btnstyle-row{display:grid;grid-template-columns:90px repeat(5,1fr);gap:6px;align-items:center;padding:6px 0;font-size:11px;}
+.btnstyle-row input{width:100%;font-size:10.5px;padding:5px 4px;border:1px solid var(--border-color);background:var(--bg-main);color:var(--text-main);border-radius:4px;}
+.btnstyle-hdr{display:grid;grid-template-columns:90px repeat(5,1fr);gap:6px;font-size:9.5px;text-transform:uppercase;color:var(--text-muted);font-weight:800;margin-bottom:4px;}
+
+.preview-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap;}
+.device-tabs{display:flex;gap:4px;}
+.device-tabs button{padding:7px 12px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:11.5px;font-weight:700;cursor:pointer;border-radius:var(--radius-sm);}
+.device-tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.preview-frame-wrap{background:var(--bg-main);border:1px solid var(--border-color);height:calc(100vh - 260px);overflow:auto;display:flex;justify-content:center;border-radius:var(--radius-sm);}
+.preview-frame-wrap iframe{height:100%;border:none;transition:width .2s;flex-shrink:0;}
+.preview-frame-wrap iframe.device-desktop{width:100%;}
+.preview-frame-wrap iframe.device-tablet{width:768px;}
+.preview-frame-wrap iframe.device-celular{width:390px;}
+.ds-hint{font-size:11px;color:var(--text-muted);margin-bottom:14px;}
+.draft-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--warning);background:var(--warning-soft);padding:5px 10px;border-radius:var(--radius-full);margin-left:10px;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Design System <span id="draftPill"></span></div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-secondary" id="historicoBtn">Histórico</button>
+        <button class="btn btn-secondary" id="discardBtn">Descartar</button>
+        <button class="btn btn-secondary" id="draftBtn">Salvar rascunho</button>
+        <button class="btn btn-primary" id="publishBtn">Publicar</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <div class="ds-hint">Cores, tipografia e estilo de botão do site inteiro. "Salvar rascunho" não muda o site público — só "Publicar" aplica de verdade. O preview ao lado é sempre em tempo real, com o rascunho atual.</div>
+
+      <div class="ds-layout">
+        <div>
+          <div class="mode-tabs">
+            <button class="active" data-mode="dark">Modo Escuro</button>
+            <button data-mode="light">Modo Claro</button>
+          </div>
+          <div class="ds-fields" id="fieldsWrap"></div>
+        </div>
+        <div>
+          <div class="preview-toolbar">
+            <div class="device-tabs">
+              <button class="active" data-device="desktop">Desktop</button>
+              <button data-device="tablet">Tablet</button>
+              <button data-device="celular">Celular</button>
+            </div>
+          </div>
+          <div class="preview-frame-wrap">
+            <iframe id="previewFrame" class="device-desktop" src="alfa-replica.html?alfa_admin_test=1"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="histModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-head"><div class="modal-title">Histórico — Design System</div><button class="modal-close" onclick="document.getElementById('histModal').classList.remove('open')">✕</button></div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Quando</th><th>Ação</th><th>Usuário</th><th></th></tr></thead>
+      <tbody id="histTbody"></tbody>
+    </table></div>
+    <div class="modal-foot"><button class="btn btn-secondary" onclick="document.getElementById('histModal').classList.remove('open')">Fechar</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+const COLOR_GROUPS = [
+  { title: 'Superfícies', fields: [
+    ['background','Fundo da página'], ['card','Cards'], ['header','Cabeçalho'], ['footer','Rodapé'], ['sidebar','Sidebar'],
+  ]},
+  { title: 'Texto e links', fields: [
+    ['text','Texto / Título'], ['subtitle','Subtítulo'], ['muted','Texto secundário'], ['link','Link'], ['link_hover','Hover do link'],
+  ]},
+  { title: 'Preços', fields: [
+    ['price','Preço'], ['price_old','Preço antigo'], ['price_promo','Preço promocional'], ['price_pix','PIX'], ['price_installment','Parcelamento'],
+  ]},
+  { title: 'Avaliações, ícones e bordas', fields: [
+    ['rating_star','Estrela de avaliação'], ['rating_text','Texto de avaliação'], ['icon','Ícones'], ['divider','Separadores'], ['border','Bordas'],
+  ]},
+  { title: 'Badges e avisos', fields: [
+    ['badge_bg','Badge — fundo'], ['badge_text','Badge — texto'],
+    ['success_bg','Sucesso — fundo'], ['success_text','Sucesso — texto'],
+    ['warning_bg','Aviso — fundo'], ['warning_text','Aviso — texto'],
+    ['danger_bg','Erro — fundo'], ['danger_text','Erro — texto'],
+  ]},
+  { title: 'Botões', fields: [
+    ['primary','Cor primária (base)'], ['secondary','Hover primário (base)'],
+    ['btn_primary_bg','Botão primário — fundo'], ['btn_primary_text','Botão primário — texto'], ['btn_primary_hover','Botão primário — hover'],
+    ['btn_secondary_bg','Botão secundário — fundo'], ['btn_secondary_text','Botão secundário — texto'], ['btn_secondary_hover','Botão secundário — hover'],
+    ['btn_buy_bg','Botão comprar — fundo'], ['btn_buy_text','Botão comprar — texto'], ['btn_buy_hover','Botão comprar — hover'],
+  ]},
+  { title: 'Formulário', fields: [
+    ['input_bg','Campo — fundo'], ['input_border','Campo — borda'], ['input_text','Campo — texto'], ['placeholder','Placeholder'],
+    ['focus_ring','Anel de foco'], ['switch_on','Switch ligado'], ['checkbox','Checkbox'], ['radio','Radio button'],
+  ]},
+  { title: 'Filtros e navegação', fields: [
+    ['filter_bg','Filtros — fundo'], ['filter_text','Filtros — texto'], ['breadcrumb_text','Breadcrumb'],
+  ]},
+];
+const ALIASES = { title:'text', hover:'secondary', link:'primary', button:'primary' };
+
+let COLORS = { dark:{}, light:{} }, TYPO = {}, BTNSTYLE = {};
+let mode = 'dark', device = 'desktop', hasDraft = false;
+let LIVE = {}; // snapshot pra "Descartar"
+
+function fieldValue(role) {
+  const src = ALIASES[role] || role;
+  return COLORS[mode][src] || '#0066FF';
+}
+
+function renderFields() {
+  const wrap = document.getElementById('fieldsWrap');
+  let html = COLOR_GROUPS.map((g, gi) => `
+    <details class="ds-group" ${gi < 2 ? 'open' : ''}>
+      <summary>${g.title}</summary>
+      <div class="ds-group-body">
+        ${g.fields.map(([role, label]) => `
+          <div class="color-row">
+            <label>${label}</label>
+            <div class="color-row-inputs">
+              <input type="color" data-role="${role}" value="${fieldValue(role)}">
+              <input type="text" data-role-text="${role}" value="${fieldValue(role)}">
+            </div>
+          </div>`).join('')}
+      </div>
+    </details>`).join('');
+
+  html += `<details class="ds-group">
+    <summary>Tipografia</summary>
+    <div class="ds-group-body">
+      <div class="color-row"><label>Fonte de título</label><input type="text" id="fontHeading" value="${TYPO.font_heading || ''}" style="width:220px;"></div>
+      <div class="color-row"><label>Fonte de texto</label><input type="text" id="fontBody" value="${TYPO.font_body || ''}" style="width:220px;"></div>
+      <div class="typo-hdr"><span>Papel</span><span>Tam.</span><span>Peso</span><span>Altura</span><span>Espaç.</span></div>
+      ${['titulo','subtitulo','texto','botao','preco','menu','card'].map(papel => {
+        const t = TYPO[papel] || {};
+        return `<div class="typo-row" data-papel="${papel}">
+          <label>${papel}</label>
+          <input data-t="size" value="${t.size||''}" placeholder="14px">
+          <input data-t="weight" value="${t.weight||''}" placeholder="400">
+          <input data-t="line_height" value="${t.line_height||''}" placeholder="1.5">
+          <input data-t="spacing" value="${t.spacing||''}" placeholder="0">
+        </div>`;
+      }).join('')}
+    </div>
+  </details>`;
+
+  html += `<details class="ds-group">
+    <summary>Estilo de botões</summary>
+    <div class="ds-group-body">
+      <div class="btnstyle-hdr"><span>Papel</span><span>Borda</span><span>Raio</span><span>Padding</span><span>Altura</span><span>Sombra</span></div>
+      ${['primario','secundario','comprar'].map(papel => {
+        const b = BTNSTYLE[papel] || {};
+        return `<div class="btnstyle-row" data-papel="${papel}">
+          <label>${papel}</label>
+          <input data-b="border_width" value="${b.border_width||''}" placeholder="0px">
+          <input data-b="radius" value="${b.radius||''}" placeholder="0px">
+          <input data-b="padding" value="${b.padding||''}" placeholder="12px 22px">
+          <input data-b="height" value="${b.height||''}" placeholder="auto">
+          <input data-b="shadow" value="${b.shadow||''}" placeholder="none">
+        </div>`;
+      }).join('')}
+    </div>
+  </details>`;
+
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('input[type=color]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      COLORS[mode][inp.dataset.role] = inp.value;
+      wrap.querySelector(`input[data-role-text="${inp.dataset.role}"]`).value = inp.value;
+      applyPreview();
+    });
+  });
+  wrap.querySelectorAll('input[data-role-text]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const role = inp.dataset.roleText;
+      COLORS[mode][role] = inp.value;
+      const c = wrap.querySelector(`input[type=color][data-role="${role}"]`);
+      if (c) c.value = inp.value;
+      applyPreview();
+    });
+  });
+  wrap.querySelectorAll('.typo-row').forEach(row => {
+    const papel = row.dataset.papel;
+    row.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('change', () => {
+        TYPO[papel] = TYPO[papel] || {};
+        TYPO[papel][inp.dataset.t] = inp.value;
+        applyPreview();
+      });
+    });
+  });
+  wrap.querySelectorAll('.btnstyle-row').forEach(row => {
+    const papel = row.dataset.papel;
+    row.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('change', () => {
+        BTNSTYLE[papel] = BTNSTYLE[papel] || {};
+        BTNSTYLE[papel][inp.dataset.b] = inp.value;
+        applyPreview();
+      });
+    });
+  });
+  document.getElementById('fontHeading').addEventListener('change', e => { TYPO.font_heading = e.target.value; applyPreview(); });
+  document.getElementById('fontBody').addEventListener('change', e => { TYPO.font_body = e.target.value; applyPreview(); });
+}
+
+function applyPreview() {
+  const frame = document.getElementById('previewFrame');
+  const win = frame.contentWindow;
+  if (!win || !win.AlfaThemeLoader) return;
+  // Reaproveita o mesmo motor do site (theme-loader.js), já carregado dentro
+  // do iframe — só precisamos alimentar ele com o estado atual do rascunho.
+  try {
+    win.document.documentElement.dataset.theme = mode;
+    win.__alfaPreviewOverride = { theme_colors: COLORS, typography: TYPO, button_style: BTNSTYLE };
+    win.AlfaThemeLoader.reapply();
+  } catch (e) { /* iframe pode não ter terminado de carregar ainda */ }
+}
+
+document.querySelectorAll('.mode-tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    mode = btn.dataset.mode;
+    document.querySelectorAll('.mode-tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderFields();
+    applyPreview();
+  });
+});
+document.querySelectorAll('.device-tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    device = btn.dataset.device;
+    document.querySelectorAll('.device-tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const frame = document.getElementById('previewFrame');
+    frame.className = 'device-' + device;
+  });
+});
+document.getElementById('previewFrame').addEventListener('load', applyPreview);
+
+function updateDraftPill() {
+  document.getElementById('draftPill').innerHTML = hasDraft ? '<span class="draft-pill">Rascunho não publicado</span>' : '';
+}
+
+async function loadAll() {
+  const { data } = await window.sb.from('site_settings')
+    .select('theme_colors,theme_colors_draft,typography,typography_draft,button_style,button_style_draft')
+    .eq('id', 1).single();
+  LIVE = { colors: data.theme_colors, typo: data.typography, btn: data.button_style };
+  hasDraft = !!(data.theme_colors_draft || data.typography_draft || data.button_style_draft);
+  COLORS = JSON.parse(JSON.stringify(data.theme_colors_draft || data.theme_colors || { dark:{}, light:{} }));
+  TYPO = JSON.parse(JSON.stringify(data.typography_draft || data.typography || {}));
+  BTNSTYLE = JSON.parse(JSON.stringify(data.button_style_draft || data.button_style || {}));
+  updateDraftPill();
+  renderFields();
+}
+
+async function logHistorico(acao, antes, depois) {
+  const { data: { user } } = await window.sb.auth.getUser();
+  await window.sb.from('conteudo_historico').insert({
+    entidade: 'design_system', entidade_id: 'site_settings', acao,
+    dados_anteriores: antes || null, dados_novos: depois || null, usuario_id: user ? user.id : null,
+  });
+}
+
+document.getElementById('draftBtn').addEventListener('click', async () => {
+  const { error } = await window.sb.from('site_settings').update({
+    theme_colors_draft: COLORS, typography_draft: TYPO, button_style_draft: BTNSTYLE,
+  }).eq('id', 1);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  hasDraft = true; updateDraftPill();
+  AdminShell.toast('Rascunho salvo — o site público continua igual até você publicar.', 'success');
+});
+
+document.getElementById('publishBtn').addEventListener('click', async () => {
+  const antes = { theme_colors: LIVE.colors, typography: LIVE.typo, button_style: LIVE.btn };
+  const depois = { theme_colors: COLORS, typography: TYPO, button_style: BTNSTYLE };
+  const { error } = await window.sb.from('site_settings').update({
+    theme_colors: COLORS, typography: TYPO, button_style: BTNSTYLE,
+    theme_colors_draft: null, typography_draft: null, button_style_draft: null,
+  }).eq('id', 1);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico('publicado', antes, depois);
+  hasDraft = false; updateDraftPill();
+  LIVE = { colors: COLORS, typo: TYPO, btn: BTNSTYLE };
+  AdminShell.toast('Publicado! O site já está com as novas cores.', 'success');
+});
+
+document.getElementById('discardBtn').addEventListener('click', async () => {
+  if (!confirm('Descartar o rascunho e voltar pro que está publicado?')) return;
+  const { error } = await window.sb.from('site_settings').update({
+    theme_colors_draft: null, typography_draft: null, button_style_draft: null,
+  }).eq('id', 1);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await loadAll();
+  applyPreview();
+  AdminShell.toast('Rascunho descartado.', 'success');
+});
+
+document.getElementById('historicoBtn').addEventListener('click', async () => {
+  const { data } = await window.sb.from('conteudo_historico').select('*')
+    .eq('entidade', 'design_system').order('created_at', { ascending: false }).limit(50);
+  const ids = [...new Set((data || []).map(h => h.usuario_id).filter(Boolean))];
+  let profiles = {};
+  if (ids.length) {
+    const { data: profs } = await window.sb.from('profiles').select('id,full_name').in('id', ids);
+    (profs || []).forEach(p => { profiles[p.id] = p.full_name; });
+  }
+  document.getElementById('histTbody').innerHTML = (data || []).length ? data.map(h => `
+    <tr>
+      <td>${new Date(h.created_at).toLocaleString('pt-BR')}</td>
+      <td><span class="status-pill blue">${h.acao}</span></td>
+      <td>${profiles[h.usuario_id] || '—'}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick='restaurar(${JSON.stringify(h.dados_anteriores).replace(/'/g,"&apos;")})'>Restaurar versão anterior</button></td>
+    </tr>`).join('') : '<tr><td colspan="4" class="table-empty">Nenhuma alteração publicada ainda.</td></tr>';
+  document.getElementById('histModal').classList.add('open');
+});
+
+window.restaurar = async function (snapshot) {
+  if (!snapshot) { AdminShell.toast('Essa entrada não tem uma versão anterior pra restaurar.', 'error'); return; }
+  if (!confirm('Restaurar esta versão? Isso publica imediatamente.')) return;
+  const antes = { theme_colors: LIVE.colors, typography: LIVE.typo, button_style: LIVE.btn };
+  const { error } = await window.sb.from('site_settings').update({
+    theme_colors: snapshot.theme_colors, typography: snapshot.typography, button_style: snapshot.button_style,
+    theme_colors_draft: null, typography_draft: null, button_style_draft: null,
+  }).eq('id', 1);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico('restaurado', antes, snapshot);
+  document.getElementById('histModal').classList.remove('open');
+  await loadAll();
+  applyPreview();
+  AdminShell.toast('Versão restaurada e publicada.', 'success');
+};
+
+(async function () {
+  const session = await AdminShell.init('aparencia-cores');
+  if (!session) return;
+  if (!AdminShell.can('design_system.editar')) {
+    document.querySelectorAll('#draftBtn,#publishBtn,#discardBtn').forEach(b => b.style.display = 'none');
+  }
+  await loadAll();
+})();
+</script>
+</body>
+</html>

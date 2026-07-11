@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Textos — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.txt-input{width:100%;max-width:320px;padding:8px 10px;border:1px solid var(--border-color);background:var(--bg-main);color:var(--text-main);border-radius:var(--radius-sm);font-size:13px;}
+.txt-cat{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);background:var(--bg-section);padding:3px 8px;border-radius:var(--radius-full);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Textos do Site</div></div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;max-width:700px;">Textos usados em botões e rótulos nas páginas do site. Edite e clique fora do campo pra salvar. Nem todo texto do site já foi conectado aqui — mais serão adicionados aos poucos.</p>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Categoria</th><th>Texto</th><th></th></tr></thead>
+          <tbody id="textsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+let TEXTS = [], canEdit = false;
+
+async function loadTexts() {
+  const { data } = await window.sb.from('site_texts').select('*').order('categoria').order('chave');
+  TEXTS = data || [];
+  render();
+}
+
+function render() {
+  document.getElementById('textsTbody').innerHTML = TEXTS.map(t => `
+    <tr>
+      <td><span class="txt-cat">${t.categoria || 'geral'}</span></td>
+      <td>
+        <input class="txt-input" value="${t.valor.replace(/"/g,'&quot;')}" data-chave="${t.chave}" ${canEdit ? '' : 'disabled'}>
+        <div style="font-size:10.5px;color:var(--text-muted);margin-top:3px;">chave: ${t.chave}${t.valor !== t.valor_padrao ? ' · alterado' : ''}</div>
+      </td>
+      <td>${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="resetText('${t.chave}')">Restaurar padrão</button>` : ''}</td>
+    </tr>`).join('');
+
+  document.querySelectorAll('.txt-input').forEach(inp => {
+    inp.addEventListener('change', () => saveText(inp.dataset.chave, inp.value));
+  });
+}
+
+async function saveText(chave, valor) {
+  const { data: { user } } = await window.sb.auth.getUser();
+  const { error } = await window.sb.from('site_texts').update({ valor, updated_by: user ? user.id : null }).eq('chave', chave);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Texto salvo.', 'success');
+  await loadTexts();
+}
+
+window.resetText = async function (chave) {
+  const t = TEXTS.find(x => x.chave === chave);
+  if (!t) return;
+  await saveText(chave, t.valor_padrao);
+};
+
+(async function () {
+  const session = await AdminShell.init('aparencia-textos');
+  if (!session) return;
+  canEdit = AdminShell.can('textos.editar');
+  await loadTexts();
+})();
+</script>
+</body>
+</html>

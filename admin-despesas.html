@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Despesas — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.desp-total{font-size:12.5px;color:var(--text-muted);}
+.desp-total b{color:var(--text-main);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Despesas</div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-primary" id="newDespBtn">+ Nova Despesa</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="search" id="searchInp" class="search-box" placeholder="Buscar por categoria ou descrição...">
+        </div>
+        <div class="desp-total" id="despTotal"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Data</th><th>Recorrência</th><th>Status</th><th></th></tr></thead>
+          <tbody id="despTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="despModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head"><div class="modal-title" id="despModalTitle">Nova Despesa</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Categoria *</label>
+      <input id="f_categoria" list="categoriaList" placeholder="Ex: Aluguel, Marketing, Fornecedores...">
+      <datalist id="categoriaList">
+        <option>Aluguel</option><option>Salários</option><option>Marketing</option>
+        <option>Fornecedores</option><option>Frete / Logística</option><option>Impostos</option>
+        <option>Assinaturas e Software</option><option>Energia / Internet</option><option>Outros</option>
+      </datalist>
+    </div>
+    <div class="field"><label>Descrição</label><input id="f_descricao" placeholder="Opcional"></div>
+    <div class="field-row">
+      <div class="field"><label>Valor (R$) *</label><input type="number" id="f_valor" step="0.01" min="0"></div>
+      <div class="field"><label id="f_data_lbl">Data</label><input type="date" id="f_data"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label class="chk-row" style="margin-top:6px;"><input type="checkbox" id="f_recorrente"> Despesa recorrente (repete todo mês)</label></div>
+      <div class="field"><label class="chk-row" style="margin-top:6px;"><input type="checkbox" id="f_ativo" checked> Ativa</label></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+let DESPESAS = [];
+let editingId = null;
+
+function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+function fmtDate(d) { return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR'); }
+
+async function loadDespesas() {
+  const { data, error } = await window.sb.from('despesas').select('*').order('data', { ascending: false });
+  if (error) { AdminShell.toast('Erro ao carregar despesas: ' + error.message, 'error'); return; }
+  DESPESAS = data || [];
+  renderTable();
+}
+
+function renderTable() {
+  const q = document.getElementById('searchInp').value.trim().toLowerCase();
+  let list = DESPESAS.filter(d => !q || d.categoria.toLowerCase().includes(q) || (d.descricao || '').toLowerCase().includes(q));
+  const total = list.filter(d => d.ativo).reduce((s, d) => s + Number(d.valor), 0);
+  document.getElementById('despTotal').innerHTML = list.length + ' despesa' + (list.length !== 1 ? 's' : '') + ' · <b>' + fmtBRL(total) + '</b> ativas';
+  const tbody = document.getElementById('despTbody');
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhuma despesa cadastrada.</td></tr>'; return; }
+  tbody.innerHTML = list.map(d => `
+    <tr>
+      <td class="strong">${d.categoria}</td>
+      <td>${d.descricao || '—'}</td>
+      <td class="strong">${fmtBRL(d.valor)}</td>
+      <td>${fmtDate(d.data)}</td>
+      <td>${d.recorrente ? '<span class="status-pill green">Mensal</span>' : '<span class="status-pill gray">Única</span>'}</td>
+      <td>${d.ativo ? '<span class="status-pill green">Ativa</span>' : '<span class="status-pill gray">Inativa</span>'}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openEdit(${d.id})">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDesp(${d.id})">Excluir</button>
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('searchInp').addEventListener('input', renderTable);
+
+function openModal() { document.getElementById('despModal').classList.add('open'); }
+function closeModal() { document.getElementById('despModal').classList.remove('open'); }
+
+document.getElementById('newDespBtn').addEventListener('click', () => {
+  editingId = null;
+  document.getElementById('despModalTitle').textContent = 'Nova Despesa';
+  document.getElementById('f_categoria').value = '';
+  document.getElementById('f_descricao').value = '';
+  document.getElementById('f_valor').value = '';
+  document.getElementById('f_data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('f_recorrente').checked = false;
+  document.getElementById('f_ativo').checked = true;
+  openModal();
+});
+
+window.openEdit = function (id) {
+  const d = DESPESAS.find(x => x.id === id);
+  if (!d) return;
+  editingId = id;
+  document.getElementById('despModalTitle').textContent = 'Editar Despesa';
+  document.getElementById('f_categoria').value = d.categoria;
+  document.getElementById('f_descricao').value = d.descricao || '';
+  document.getElementById('f_valor').value = d.valor;
+  document.getElementById('f_data').value = d.data;
+  document.getElementById('f_recorrente').checked = d.recorrente;
+  document.getElementById('f_ativo').checked = d.ativo;
+  openModal();
+};
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const categoria = document.getElementById('f_categoria').value.trim();
+  const valor = parseFloat(document.getElementById('f_valor').value);
+  const data = document.getElementById('f_data').value;
+  if (!categoria) { AdminShell.toast('Informe a categoria da despesa.', 'error'); return; }
+  if (!valor || valor <= 0) { AdminShell.toast('Informe um valor válido.', 'error'); return; }
+  if (!data) { AdminShell.toast('Informe a data.', 'error'); return; }
+
+  const payload = {
+    categoria, valor, data,
+    descricao: document.getElementById('f_descricao').value.trim() || null,
+    recorrente: document.getElementById('f_recorrente').checked,
+    ativo: document.getElementById('f_ativo').checked,
+  };
+  let error;
+  if (editingId) {
+    ({ error } = await window.sb.from('despesas').update(payload).eq('id', editingId));
+  } else {
+    ({ error } = await window.sb.from('despesas').insert(payload));
+  }
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Despesa salva com sucesso!', 'success');
+  closeModal();
+  loadDespesas();
+});
+
+window.deleteDesp = async function (id) {
+  if (!confirm('Excluir esta despesa? Isso também some do histórico de lucro.')) return;
+  const { error } = await window.sb.from('despesas').delete().eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  loadDespesas();
+};
+
+(async function () {
+  const session = await AdminShell.init('despesas');
+  if (!session) return;
+  if (!AdminShell.can('faturamento.editar')) {
+    document.getElementById('newDespBtn').style.display = 'none';
+  }
+  await loadDespesas();
+})();
+</script>
+</body>
+</html>

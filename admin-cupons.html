@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cupons — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.cupom-code{font-weight:800;letter-spacing:.06em;font-family:monospace;font-size:13px;}
+.cupom-usos-bar{width:60px;height:4px;background:var(--border-color);border-radius:2px;overflow:hidden;display:inline-block;margin-left:8px;vertical-align:middle;}
+.cupom-usos-bar span{display:block;height:100%;background:var(--primary);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Cupons</div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-primary" id="newCupomBtn">+ Novo Cupom</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="search" id="searchInp" class="search-box" placeholder="Buscar por código...">
+        </div>
+        <div id="cupCount" style="font-size:12.5px;color:var(--text-muted);"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Código</th><th>Desconto</th><th>Mínimo</th><th>Uso</th><th>Validade</th><th>Status</th><th></th></tr></thead>
+          <tbody id="cupTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cupModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head"><div class="modal-title" id="cupModalTitle">Novo Cupom</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Código *</label><input id="f_codigo" placeholder="BEMVINDO10" style="text-transform:uppercase;"></div>
+    <div class="field-row">
+      <div class="field"><label>Tipo de desconto</label>
+        <select id="f_tipo"><option value="percentual">Percentual (%)</option><option value="fixo">Valor fixo (R$)</option></select>
+      </div>
+      <div class="field"><label id="f_valor_lbl">Valor (%)</label><input type="number" id="f_valor" step="0.01" min="0" placeholder="10"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Pedido mínimo (R$)</label><input type="number" id="f_valor_minimo" step="0.01" min="0" value="0"></div>
+      <div class="field"><label>Limite de uso</label><input type="number" id="f_limite_uso" min="1" placeholder="Ilimitado"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Válido a partir de</label><input type="datetime-local" id="f_validade_inicio"></div>
+      <div class="field"><label>Válido até</label><input type="datetime-local" id="f_validade_fim"></div>
+    </div>
+    <div class="field"><label class="chk-row"><input type="checkbox" id="f_ativo" checked> Ativo</label></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+let CUPONS = [];
+let editingId = null;
+
+function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('pt-BR') : null; }
+function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+
+async function loadCupons() {
+  const { data, error } = await window.sb.from('cupons').select('*').order('created_at', { ascending: false });
+  if (error) { AdminShell.toast('Erro ao carregar cupons: ' + error.message, 'error'); return; }
+  CUPONS = data || [];
+  renderTable();
+}
+
+function statusOf(c) {
+  const now = new Date();
+  if (!c.ativo) return { label: 'Inativo', cls: 'gray' };
+  if (c.validade_fim && new Date(c.validade_fim) < now) return { label: 'Expirado', cls: 'red' };
+  if (c.validade_inicio && new Date(c.validade_inicio) > now) return { label: 'Agendado', cls: 'gray' };
+  if (c.limite_uso && c.usos >= c.limite_uso) return { label: 'Esgotado', cls: 'red' };
+  return { label: 'Ativo', cls: 'green' };
+}
+
+function renderTable() {
+  const q = document.getElementById('searchInp').value.trim().toLowerCase();
+  let list = CUPONS.filter(c => !q || c.codigo.toLowerCase().includes(q));
+  document.getElementById('cupCount').textContent = list.length + ' cupom' + (list.length !== 1 ? 's' : '');
+  const tbody = document.getElementById('cupTbody');
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhum cupom cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = list.map(c => {
+    const st = statusOf(c);
+    const usoPct = c.limite_uso ? Math.min(100, Math.round(c.usos / c.limite_uso * 100)) : 0;
+    const validade = (c.validade_inicio || c.validade_fim)
+      ? [fmtDate(c.validade_inicio) || 'agora', fmtDate(c.validade_fim) || 'sem fim'].join(' → ')
+      : '—';
+    return `<tr>
+      <td class="cupom-code">${c.codigo}</td>
+      <td>${c.tipo === 'percentual' ? c.valor + '%' : fmtBRL(c.valor)}</td>
+      <td>${c.valor_minimo > 0 ? fmtBRL(c.valor_minimo) : '—'}</td>
+      <td>${c.usos}${c.limite_uso ? ' / ' + c.limite_uso : ''}${c.limite_uso ? `<span class="cupom-usos-bar"><span style="width:${usoPct}%;"></span></span>` : ''}</td>
+      <td>${validade}</td>
+      <td><span class="status-pill ${st.cls}">${st.label}</span></td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openEdit(${c.id})">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCupom(${c.id})">Excluir</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('searchInp').addEventListener('input', renderTable);
+
+function openModal() { document.getElementById('cupModal').classList.add('open'); }
+function closeModal() { document.getElementById('cupModal').classList.remove('open'); }
+
+document.getElementById('f_tipo').addEventListener('change', e => {
+  document.getElementById('f_valor_lbl').textContent = e.target.value === 'percentual' ? 'Valor (%)' : 'Valor (R$)';
+});
+
+document.getElementById('newCupomBtn').addEventListener('click', () => {
+  editingId = null;
+  document.getElementById('cupModalTitle').textContent = 'Novo Cupom';
+  document.getElementById('f_codigo').value = '';
+  document.getElementById('f_tipo').value = 'percentual';
+  document.getElementById('f_valor_lbl').textContent = 'Valor (%)';
+  document.getElementById('f_valor').value = '';
+  document.getElementById('f_valor_minimo').value = 0;
+  document.getElementById('f_limite_uso').value = '';
+  document.getElementById('f_validade_inicio').value = '';
+  document.getElementById('f_validade_fim').value = '';
+  document.getElementById('f_ativo').checked = true;
+  openModal();
+});
+
+window.openEdit = function (id) {
+  const c = CUPONS.find(x => x.id === id);
+  if (!c) return;
+  editingId = id;
+  document.getElementById('cupModalTitle').textContent = 'Editar Cupom';
+  document.getElementById('f_codigo').value = c.codigo;
+  document.getElementById('f_tipo').value = c.tipo;
+  document.getElementById('f_valor_lbl').textContent = c.tipo === 'percentual' ? 'Valor (%)' : 'Valor (R$)';
+  document.getElementById('f_valor').value = c.valor;
+  document.getElementById('f_valor_minimo').value = c.valor_minimo;
+  document.getElementById('f_limite_uso').value = c.limite_uso || '';
+  document.getElementById('f_validade_inicio').value = toLocalInput(c.validade_inicio);
+  document.getElementById('f_validade_fim').value = toLocalInput(c.validade_fim);
+  document.getElementById('f_ativo').checked = c.ativo;
+  openModal();
+};
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const codigo = document.getElementById('f_codigo').value.trim().toUpperCase();
+  const valor = parseFloat(document.getElementById('f_valor').value);
+  if (!codigo) { AdminShell.toast('Informe o código do cupom.', 'error'); return; }
+  if (!valor || valor <= 0) { AdminShell.toast('Informe um valor de desconto válido.', 'error'); return; }
+  const tipo = document.getElementById('f_tipo').value;
+  if (tipo === 'percentual' && valor > 100) { AdminShell.toast('Desconto percentual não pode passar de 100%.', 'error'); return; }
+
+  const inicio = document.getElementById('f_validade_inicio').value;
+  const fim = document.getElementById('f_validade_fim').value;
+  const payload = {
+    codigo, tipo, valor,
+    valor_minimo: parseFloat(document.getElementById('f_valor_minimo').value) || 0,
+    limite_uso: document.getElementById('f_limite_uso').value ? parseInt(document.getElementById('f_limite_uso').value) : null,
+    validade_inicio: inicio ? new Date(inicio).toISOString() : null,
+    validade_fim: fim ? new Date(fim).toISOString() : null,
+    ativo: document.getElementById('f_ativo').checked,
+  };
+  let error;
+  if (editingId) {
+    ({ error } = await window.sb.from('cupons').update(payload).eq('id', editingId));
+  } else {
+    ({ error } = await window.sb.from('cupons').insert(payload));
+  }
+  if (error) { AdminShell.toast(/duplicate|unique/i.test(error.message) ? 'Já existe um cupom com esse código.' : 'Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Cupom salvo com sucesso!', 'success');
+  closeModal();
+  loadCupons();
+});
+
+window.deleteCupom = async function (id) {
+  if (!confirm('Excluir este cupom? Ele deixará de funcionar no checkout imediatamente.')) return;
+  const { error } = await window.sb.from('cupons').delete().eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  loadCupons();
+};
+
+(async function () {
+  const session = await AdminShell.init('cupons');
+  if (!session) return;
+  if (!AdminShell.can('precos.editar')) {
+    document.getElementById('newCupomBtn').style.display = 'none';
+  }
+  await loadCupons();
+})();
+</script>
+</body>
+</html>

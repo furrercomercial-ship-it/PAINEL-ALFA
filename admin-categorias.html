@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Categorias — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.cat-card{background:var(--bg-card);border:1px solid var(--border-color);margin-bottom:14px;}
+.cat-card-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border-color);}
+.cat-icon{width:22px;height:22px;color:var(--primary);flex-shrink:0;}
+.cat-name{font-size:14.5px;font-weight:800;flex:1;}
+.cat-meta{font-size:11px;color:var(--text-muted);}
+.sub-list{padding:8px 18px 14px;}
+.sub-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-color);font-size:13px;}
+.sub-row:last-child{border-bottom:none;}
+.sub-row .sub-name{flex:1;}
+.ord-btns{display:flex;flex-direction:column;gap:1px;}
+.ord-btns button{background:transparent;border:1px solid var(--border-color);color:var(--text-muted);cursor:pointer;width:20px;height:16px;font-size:9px;line-height:1;}
+.ord-btns button:hover{color:var(--text-main);}
+.add-sub-btn{margin-top:8px;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Categorias</div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-primary" id="newCatBtn">+ Nova Categoria</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <div id="catList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CATEGORIA -->
+<div class="modal-overlay" id="catModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head"><div class="modal-title" id="catModalTitle">Nova Categoria</div><button class="modal-close" onclick="closeCatModal()">✕</button></div>
+    <div class="field"><label>Nome *</label><input id="fc_nome"></div>
+    <div class="field-row">
+      <div class="field"><label>Ordem de exibição</label><input type="number" id="fc_ordem" value="0"></div>
+      <div class="field"><label class="chk-row" style="margin-top:30px;"><input type="checkbox" id="fc_ativo" checked> Ativa</label></div>
+    </div>
+    <div class="field"><label>Ícone (SVG)</label><textarea id="fc_icone" placeholder="<svg ...>...</svg>"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Imagem da categoria</label><div id="uploadCatImg"></div></div>
+      <div class="field"><label>Banner da categoria</label><div id="uploadCatBanner"></div></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Cor</label><input type="color" id="fc_cor" value="#0066FF" style="width:60px;height:36px;padding:2px;cursor:pointer;"></div>
+      <div class="field"><label class="chk-row" style="margin-top:30px;"><input type="checkbox" id="fc_mostrar_home"> Exibir na Home</label></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeCatModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveCatBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SUBCATEGORIA -->
+<div class="modal-overlay" id="subModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head"><div class="modal-title" id="subModalTitle">Nova Subcategoria</div><button class="modal-close" onclick="closeSubModal()">✕</button></div>
+    <div class="field"><label>Nome *</label><input id="fs_nome"></div>
+    <div class="field-row">
+      <div class="field"><label>Ordem</label><input type="number" id="fs_ordem" value="0"></div>
+      <div class="field"><label class="chk-row" style="margin-top:30px;"><input type="checkbox" id="fs_ativo" checked> Ativa</label></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeSubModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveSubBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-upload.js"></script>
+<script>
+let CATS = [];
+let editingCatId = null;
+let editingSubId = null;
+let editingSubParent = null;
+let catImgUrl = '';
+let catBannerUrl = '';
+
+function slugify(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+async function loadCats() {
+  const [{ data: cats }, { data: subs }] = await Promise.all([
+    window.sb.from('categories').select('*').order('ordem'),
+    window.sb.from('subcategories').select('*').order('ordem'),
+  ]);
+  CATS = (cats || []).map(c => ({ ...c, subs: (subs || []).filter(s => s.categoria_id === c.id) }));
+  render();
+}
+
+function render() {
+  const el = document.getElementById('catList');
+  if (!CATS.length) { el.innerHTML = '<div class="table-empty">Nenhuma categoria cadastrada.</div>'; return; }
+  el.innerHTML = CATS.map((c, ci) => `
+    <div class="cat-card">
+      <div class="cat-card-head">
+        <span class="cat-icon">${c.icone || ''}</span>
+        <span class="cat-name">${c.nome} ${c.ativo ? '' : '<span class="status-pill gray">Inativa</span>'}</span>
+        <span class="cat-meta">ordem ${c.ordem} · ${c.subs.length} subcategoria${c.subs.length !== 1 ? 's' : ''}</span>
+        <div class="ord-btns">
+          <button onclick="moveCategory(${c.id},-1)" ${ci===0?'disabled':''}>▲</button>
+          <button onclick="moveCategory(${c.id},1)" ${ci===CATS.length-1?'disabled':''}>▼</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openEditCat(${c.id})">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCat(${c.id})">Excluir</button>
+      </div>
+      <div class="sub-list">
+        ${c.subs.map((s, si) => `
+          <div class="sub-row">
+            <div class="ord-btns">
+              <button onclick="moveSub(${s.id},${c.id},-1)" ${si===0?'disabled':''}>▲</button>
+              <button onclick="moveSub(${s.id},${c.id},1)" ${si===c.subs.length-1?'disabled':''}>▼</button>
+            </div>
+            <span class="sub-name">${s.nome} ${s.ativo ? '' : '<span class="status-pill gray">Inativa</span>'}</span>
+            <button class="btn btn-secondary btn-sm" onclick="openEditSub(${s.id},${c.id})">Editar</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSub(${s.id})">Excluir</button>
+          </div>`).join('')}
+        <button class="btn btn-secondary btn-sm add-sub-btn" onclick="openNewSub(${c.id})">+ Subcategoria</button>
+      </div>
+    </div>`).join('');
+}
+
+/* ── CATEGORIA ── */
+function openCatModal() { document.getElementById('catModal').classList.add('open'); }
+function closeCatModal() { document.getElementById('catModal').classList.remove('open'); }
+
+document.getElementById('newCatBtn').addEventListener('click', () => {
+  editingCatId = null;
+  catImgUrl = ''; catBannerUrl = '';
+  document.getElementById('catModalTitle').textContent = 'Nova Categoria';
+  document.getElementById('fc_nome').value = '';
+  document.getElementById('fc_ordem').value = CATS.length + 1;
+  document.getElementById('fc_ativo').checked = true;
+  document.getElementById('fc_icone').value = '';
+  document.getElementById('fc_cor').value = '#0066FF';
+  document.getElementById('fc_mostrar_home').checked = false;
+  AdminUpload.mountField(document.getElementById('uploadCatImg'), 'categorias', '', url => catImgUrl = url);
+  AdminUpload.mountField(document.getElementById('uploadCatBanner'), 'categorias', '', url => catBannerUrl = url);
+  openCatModal();
+});
+
+window.openEditCat = function (id) {
+  const c = CATS.find(x => x.id === id);
+  if (!c) return;
+  editingCatId = id;
+  catImgUrl = c.imagem_url || ''; catBannerUrl = c.banner_url || '';
+  document.getElementById('catModalTitle').textContent = 'Editar Categoria';
+  document.getElementById('fc_nome').value = c.nome;
+  document.getElementById('fc_ordem').value = c.ordem;
+  document.getElementById('fc_ativo').checked = c.ativo;
+  document.getElementById('fc_icone').value = c.icone || '';
+  document.getElementById('fc_cor').value = c.cor || '#0066FF';
+  document.getElementById('fc_mostrar_home').checked = !!c.mostrar_home;
+  AdminUpload.mountField(document.getElementById('uploadCatImg'), 'categorias', c.imagem_url, url => catImgUrl = url);
+  AdminUpload.mountField(document.getElementById('uploadCatBanner'), 'categorias', c.banner_url, url => catBannerUrl = url);
+  openCatModal();
+};
+
+document.getElementById('saveCatBtn').addEventListener('click', async () => {
+  const nome = document.getElementById('fc_nome').value.trim();
+  if (!nome) { AdminShell.toast('Informe o nome da categoria.', 'error'); return; }
+  const payload = {
+    nome, ordem: parseInt(document.getElementById('fc_ordem').value) || 0,
+    ativo: document.getElementById('fc_ativo').checked,
+    icone: document.getElementById('fc_icone').value.trim() || null,
+    imagem_url: catImgUrl || null,
+    banner_url: catBannerUrl || null,
+    cor: document.getElementById('fc_cor').value || null,
+    mostrar_home: document.getElementById('fc_mostrar_home').checked,
+  };
+  let error;
+  if (editingCatId) {
+    ({ error } = await window.sb.from('categories').update(payload).eq('id', editingCatId));
+  } else {
+    payload.slug = slugify(nome) + '-' + Date.now().toString(36);
+    ({ error } = await window.sb.from('categories').insert(payload));
+  }
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Categoria salva com sucesso!', 'success');
+  closeCatModal();
+  loadCats();
+});
+
+window.deleteCat = async function (id) {
+  if (!confirm('Excluir esta categoria e todas as suas subcategorias? Produtos vinculados perderão a categoria.')) return;
+  const { error } = await window.sb.from('categories').delete().eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  loadCats();
+};
+
+window.moveCategory = async function (id, dir) {
+  const idx = CATS.findIndex(c => c.id === id);
+  const swapWith = CATS[idx + dir];
+  if (!swapWith) return;
+  const a = CATS[idx], b = swapWith;
+  await Promise.all([
+    window.sb.from('categories').update({ ordem: b.ordem }).eq('id', a.id),
+    window.sb.from('categories').update({ ordem: a.ordem }).eq('id', b.id),
+  ]);
+  loadCats();
+};
+
+/* ── SUBCATEGORIA ── */
+function openSubModal() { document.getElementById('subModal').classList.add('open'); }
+function closeSubModal() { document.getElementById('subModal').classList.remove('open'); }
+
+window.openNewSub = function (catId) {
+  editingSubId = null;
+  editingSubParent = catId;
+  const cat = CATS.find(c => c.id === catId);
+  document.getElementById('subModalTitle').textContent = 'Nova Subcategoria em ' + (cat ? cat.nome : '');
+  document.getElementById('fs_nome').value = '';
+  document.getElementById('fs_ordem').value = cat ? cat.subs.length + 1 : 0;
+  document.getElementById('fs_ativo').checked = true;
+  openSubModal();
+};
+
+window.openEditSub = function (subId, catId) {
+  const cat = CATS.find(c => c.id === catId);
+  const s = cat && cat.subs.find(x => x.id === subId);
+  if (!s) return;
+  editingSubId = subId;
+  editingSubParent = catId;
+  document.getElementById('subModalTitle').textContent = 'Editar Subcategoria';
+  document.getElementById('fs_nome').value = s.nome;
+  document.getElementById('fs_ordem').value = s.ordem;
+  document.getElementById('fs_ativo').checked = s.ativo;
+  openSubModal();
+};
+
+document.getElementById('saveSubBtn').addEventListener('click', async () => {
+  const nome = document.getElementById('fs_nome').value.trim();
+  if (!nome) { AdminShell.toast('Informe o nome da subcategoria.', 'error'); return; }
+  const payload = {
+    nome, ordem: parseInt(document.getElementById('fs_ordem').value) || 0,
+    ativo: document.getElementById('fs_ativo').checked,
+    categoria_id: editingSubParent,
+  };
+  let error;
+  if (editingSubId) {
+    ({ error } = await window.sb.from('subcategories').update(payload).eq('id', editingSubId));
+  } else {
+    payload.slug = slugify(nome) + '-' + Date.now().toString(36);
+    ({ error } = await window.sb.from('subcategories').insert(payload));
+  }
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Subcategoria salva com sucesso!', 'success');
+  closeSubModal();
+  loadCats();
+});
+
+window.deleteSub = async function (id) {
+  if (!confirm('Excluir esta subcategoria? Produtos vinculados perderão a subcategoria.')) return;
+  const { error } = await window.sb.from('subcategories').delete().eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  loadCats();
+};
+
+window.moveSub = async function (id, catId, dir) {
+  const cat = CATS.find(c => c.id === catId);
+  const idx = cat.subs.findIndex(s => s.id === id);
+  const swapWith = cat.subs[idx + dir];
+  if (!swapWith) return;
+  const a = cat.subs[idx], b = swapWith;
+  await Promise.all([
+    window.sb.from('subcategories').update({ ordem: b.ordem }).eq('id', a.id),
+    window.sb.from('subcategories').update({ ordem: a.ordem }).eq('id', b.id),
+  ]);
+  loadCats();
+};
+
+(async function () {
+  const session = await AdminShell.init('categorias');
+  if (!session) return;
+  if (!AdminShell.can('categorias.editar')) {
+    document.getElementById('newCatBtn').style.display = 'none';
+  }
+  await loadCats();
+})();
+</script>
+</body>
+</html>

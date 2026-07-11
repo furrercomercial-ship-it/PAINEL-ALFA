@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Painel Admin — Alfa Informática</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<div class="admin-login-wrap">
+  <div class="admin-login-card">
+    <div class="admin-login-logo"><img src="logo-dark.png" alt="Alfa Informática"></div>
+    <div class="admin-login-title">Painel Administrativo</div>
+    <div class="admin-login-sub">Acesso restrito à equipe Alfa Informática</div>
+
+    <div class="admin-login-msg" id="loginMsg"></div>
+
+    <div class="field">
+      <label>E-mail</label>
+      <input type="email" id="email" placeholder="seu@email.com" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="password" placeholder="Sua senha" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn">ENTRAR</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script>
+function showMsg(type, text) {
+  const el = document.getElementById('loginMsg');
+  el.className = 'admin-login-msg ' + type;
+  el.textContent = text;
+}
+
+if (new URLSearchParams(location.search).get('denied') === '1') {
+  showMsg('error', 'Essa conta não tem acesso ao painel administrativo.');
+}
+
+async function doAdminLogin() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  if (!email || !password) { showMsg('error', 'Preencha e-mail e senha.'); return; }
+
+  const { data, error } = await window.sb.auth.signInWithPassword({ email, password });
+  if (error) { showMsg('error', 'E-mail ou senha incorretos.'); return; }
+
+  const { data: profile } = await window.sb.from('profiles').select('role,is_blocked').eq('id', data.user.id).single();
+  if (!profile || profile.role === 'cliente' || profile.is_blocked) {
+    await window.sb.auth.signOut();
+    showMsg('error', 'Essa conta não tem acesso ao painel administrativo.');
+    return;
+  }
+
+  showMsg('success', 'Login realizado! Redirecionando...');
+  location.href = 'admin-dashboard.html';
+}
+
+document.getElementById('loginBtn').addEventListener('click', doAdminLogin);
+document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') doAdminLogin(); });
+
+(async function checkExistingSession() {
+  const { data: { session } } = await window.sb.auth.getSession();
+  if (!session) return;
+  const { data: profile } = await window.sb.from('profiles').select('role,is_blocked').eq('id', session.user.id).single();
+  if (profile && profile.role !== 'cliente' && !profile.is_blocked) location.href = 'admin-dashboard.html';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SEO — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Aparência — SEO</div></div>
+    <div class="admin-content" style="max-width:700px;">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="card">
+        <div class="card-title">SEO Padrão do Site</div>
+        <div class="field"><label>Meta Title</label><input id="f_seo_title" maxlength="70"></div>
+        <div class="field"><label>Meta Description</label><textarea id="f_seo_description" maxlength="200"></textarea></div>
+        <div class="field"><label>Imagem de compartilhamento (Open Graph)</label><div id="uploadOg"></div></div>
+      </div>
+
+      <button class="btn btn-primary" id="saveBtn" style="margin-top:20px;">Salvar Alterações</button>
+      <span id="saveMsg" style="margin-left:12px;font-size:12.5px;color:var(--success);display:none;">Salvo!</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-upload.js"></script>
+<script>
+let ogUrl = '';
+async function load() {
+  const { data } = await window.sb.from('site_settings').select('*').eq('id', 1).single();
+  document.getElementById('f_seo_title').value = data.seo_title || '';
+  document.getElementById('f_seo_description').value = data.seo_description || '';
+  ogUrl = data.seo_og_image_url || '';
+  AdminUpload.mountField(document.getElementById('uploadOg'), 'seo', ogUrl, url => ogUrl = url);
+}
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const payload = {
+    seo_title: document.getElementById('f_seo_title').value.trim() || null,
+    seo_description: document.getElementById('f_seo_description').value.trim() || null,
+    seo_og_image_url: ogUrl || null,
+  };
+  const { error } = await window.sb.from('site_settings').update(payload).eq('id', 1);
+  if (error) { AdminShell.toast('Erro ao salvar: ' + error.message, 'error'); return; }
+  const msg = document.getElementById('saveMsg');
+  msg.style.display = 'inline';
+  setTimeout(() => msg.style.display = 'none', 2200);
+});
+
+(async function () {
+  const session = await AdminShell.init('aparencia-seo');
+  if (!session) return;
+  await load();
+})();
+</script>
+</body>
+</html>

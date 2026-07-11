@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lucro — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.charts-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-bottom:20px;}
+@media(max-width:1000px){.charts-grid{grid-template-columns:1fr;}}
+
+.bar-chart{display:flex;align-items:flex-end;gap:14px;height:180px;padding-top:10px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:6px;}
+.bar-fill{width:100%;max-width:44px;background:var(--primary);position:relative;transition:height .3s;border-radius:3px 3px 0 0;}
+.bar-fill.neg{background:var(--danger);}
+.bar-val{font-size:10.5px;color:var(--text-muted);white-space:nowrap;}
+.bar-lbl{font-size:10.5px;color:var(--text-muted);margin-top:4px;text-transform:capitalize;}
+
+.hbar-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.hbar-lbl{width:150px;flex-shrink:0;font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hbar-track{flex:1;background:var(--bg-main);height:16px;position:relative;border-radius:3px;overflow:hidden;}
+.hbar-fill{height:100%;background:var(--primary);}
+.hbar-val{width:70px;flex-shrink:0;font-size:11.5px;color:var(--text-muted);text-align:right;}
+
+.period-tabs{display:flex;gap:6px;}
+.period-tabs button{padding:7px 14px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:11.5px;font-weight:700;cursor:pointer;border-radius:var(--radius-md);}
+.period-tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+.metric-card.hl{border-color:var(--primary);}
+.metric-card .metric-val.good{color:var(--success);}
+.metric-card .metric-val.bad{color:var(--danger);}
+
+.waterfall-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.wf-lbl{width:130px;flex-shrink:0;font-size:12.5px;color:var(--text-secondary);}
+.wf-track{flex:1;background:var(--bg-main);height:22px;border-radius:4px;overflow:hidden;}
+.wf-fill{height:100%;transition:width .3s;}
+.wf-val{width:100px;flex-shrink:0;font-size:12.5px;font-weight:700;text-align:right;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Lucro</div>
+      <div class="period-tabs" id="periodTabs">
+        <button data-p="mes" class="active">Este mês</button>
+        <button data-p="mes_passado">Mês passado</button>
+        <button data-p="3m">Últimos 3 meses</button>
+        <button data-p="6m">Últimos 6 meses</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="metrics-grid" id="metricsGrid"></div>
+
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-title">Composição do resultado</div>
+          <div id="waterfall"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Despesas por categoria</div>
+          <div id="despChart"></div>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-title">Lucro líquido — últimos 6 meses</div>
+          <div class="bar-chart" id="trendChart"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Produtos mais lucrativos no período</div>
+          <div id="topProfitChart"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+let period = 'mes';
+let RAW = null; // dados dos últimos 6 meses, buscados uma vez só
+
+function fmtBRL(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+function metricCard(lbl, val, sub, cls) {
+  cls = cls || '';
+  const isHl = cls.indexOf('hl') !== -1;
+  const valCls = cls.replace('hl', '').trim();
+  return `<div class="metric-card${isHl ? ' hl' : ''}"><div class="metric-lbl">${lbl}</div><div class="metric-val${valCls ? ' ' + valCls : ''}">${val}</div>${sub ? `<div class="metric-sub">${sub}</div>` : ''}</div>`;
+}
+
+function startOfMonth(d) { const x = new Date(d); x.setDate(1); x.setHours(0,0,0,0); return x; }
+function endOfMonth(d) { const x = startOfMonth(d); x.setMonth(x.getMonth() + 1); x.setMilliseconds(-1); return x; }
+function addMonths(d, n) { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; }
+
+function periodRange(p) {
+  const now = new Date();
+  if (p === 'mes') return { start: startOfMonth(now), end: now };
+  if (p === 'mes_passado') { const last = addMonths(now, -1); return { start: startOfMonth(last), end: endOfMonth(last) }; }
+  if (p === '3m') return { start: startOfMonth(addMonths(now, -2)), end: now };
+  return { start: startOfMonth(addMonths(now, -5)), end: now }; // 6m
+}
+
+// Meses de calendário (1º dia) cobertos por [start,end], inclusive.
+function monthsBetween(start, end) {
+  const list = [];
+  let cur = startOfMonth(start);
+  const last = startOfMonth(end);
+  while (cur <= last) { list.push(new Date(cur)); cur = addMonths(cur, 1); }
+  return list;
+}
+
+function despesaOcorreNoMes(d, monthStart) {
+  const dData = new Date(d.data + 'T00:00:00');
+  if (!d.recorrente) return dData >= monthStart && dData < addMonths(monthStart, 1);
+  return dData < addMonths(monthStart, 1); // recorrente: conta se já tinha começado até o fim desse mês
+}
+
+function computeWindow(start, end, orders, items, despesas, productCostMap) {
+  const isPaid = o => !['aguardando_pagamento', 'cancelado'].includes(o.status);
+  const inWindow = o => new Date(o.created_at) >= start && new Date(o.created_at) <= end;
+  const winOrders = orders.filter(o => isPaid(o) && inWindow(o));
+  const winOrderIds = new Set(winOrders.map(o => o.id));
+
+  const revenue = winOrders.reduce((s, o) => s + Number(o.total), 0);
+
+  let cogs = 0;
+  const profitByProduct = {};
+  items.forEach(it => {
+    if (!winOrderIds.has(it.order_id)) return;
+    const cost = it.cost_price_snapshot != null ? Number(it.cost_price_snapshot) : (productCostMap[it.product_id] || 0);
+    const itemCogs = cost * it.qty;
+    cogs += itemCogs;
+    const key = it.product_id || it.product_name_snapshot;
+    if (!profitByProduct[key]) profitByProduct[key] = { name: it.product_name_snapshot, profit: 0 };
+    profitByProduct[key].profit += (Number(it.unit_price) - cost) * it.qty;
+  });
+
+  const months = monthsBetween(start, end);
+  let despesasTotal = 0;
+  const despesasPorCategoria = {};
+  despesas.forEach(d => {
+    if (!d.ativo) return;
+    let vezes = 0;
+    months.forEach(m => { if (despesaOcorreNoMes(d, m)) vezes++; });
+    if (!vezes) return;
+    const valorTotal = d.valor * vezes;
+    despesasTotal += valorTotal;
+    despesasPorCategoria[d.categoria] = (despesasPorCategoria[d.categoria] || 0) + valorTotal;
+  });
+
+  const grossProfit = revenue - cogs;
+  const netProfit = grossProfit - despesasTotal;
+
+  return { revenue, cogs, grossProfit, despesasTotal, netProfit, despesasPorCategoria, profitByProduct, orderCount: winOrders.length };
+}
+
+async function loadData() {
+  const sixMonthsAgo = startOfMonth(addMonths(new Date(), -5));
+  const [ordersRes, itemsRes, despRes, prodRes] = await Promise.all([
+    window.sb.from('orders').select('id,total,status,created_at').gte('created_at', sixMonthsAgo.toISOString()),
+    window.sb.from('order_items').select('product_id,product_name_snapshot,qty,unit_price,cost_price_snapshot,order_id'),
+    window.sb.from('despesas').select('*'),
+    window.sb.from('products').select('id,cost_price'),
+  ]);
+  const productCostMap = {};
+  (prodRes.data || []).forEach(p => { productCostMap[p.id] = Number(p.cost_price) || 0; });
+
+  RAW = {
+    orders: ordersRes.data || [],
+    items: itemsRes.data || [],
+    despesas: despRes.data || [],
+    productCostMap,
+  };
+  render();
+}
+
+function render() {
+  const { start, end } = periodRange(period);
+  const w = computeWindow(start, end, RAW.orders, RAW.items, RAW.despesas, RAW.productCostMap);
+  const margin = w.revenue ? (w.netProfit / w.revenue * 100) : 0;
+
+  document.getElementById('metricsGrid').innerHTML = [
+    metricCard('Receita', fmtBRL(w.revenue), w.orderCount + ' pedido' + (w.orderCount !== 1 ? 's' : '')),
+    metricCard('Custo dos Produtos (CMV)', fmtBRL(w.cogs)),
+    metricCard('Lucro Bruto', fmtBRL(w.grossProfit)),
+    metricCard('Despesas', fmtBRL(w.despesasTotal)),
+    metricCard('Lucro Líquido', fmtBRL(w.netProfit), null, 'hl ' + (w.netProfit >= 0 ? 'good' : 'bad')),
+    metricCard('Margem Líquida', margin.toFixed(1) + '%', null, margin >= 0 ? 'good' : 'bad'),
+  ].join('');
+
+  renderWaterfall(w);
+  renderDespesasChart(w.despesasPorCategoria);
+  renderTrend();
+  renderTopProfit(w.profitByProduct);
+}
+
+function renderWaterfall(w) {
+  const max = Math.max(w.revenue, 1);
+  const rows = [
+    { lbl: 'Receita', val: w.revenue, color: 'var(--primary)' },
+    { lbl: 'Custo produto', val: -w.cogs, color: 'var(--warning)' },
+    { lbl: 'Despesas', val: -w.despesasTotal, color: 'var(--danger)' },
+    { lbl: 'Lucro líquido', val: w.netProfit, color: w.netProfit >= 0 ? 'var(--success)' : 'var(--danger)' },
+  ];
+  document.getElementById('waterfall').innerHTML = rows.map(r => `
+    <div class="waterfall-row">
+      <span class="wf-lbl">${r.lbl}</span>
+      <div class="wf-track"><div class="wf-fill" style="width:${Math.min(Math.abs(r.val) / max * 100, 100)}%;background:${r.color};"></div></div>
+      <span class="wf-val" style="color:${r.color};">${r.val < 0 ? '− ' : ''}${fmtBRL(Math.abs(r.val))}</span>
+    </div>`).join('');
+}
+
+function renderDespesasChart(porCategoria) {
+  const entries = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
+  const el = document.getElementById('despChart');
+  if (!entries.length) { el.innerHTML = '<div class="table-empty">Nenhuma despesa no período.</div>'; return; }
+  const max = Math.max(...entries.map(e => e[1]), 1);
+  el.innerHTML = entries.map(([cat, val]) => `
+    <div class="hbar-row">
+      <span class="hbar-lbl" title="${cat}">${cat}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${val/max*100}%;background:var(--danger);"></div></div>
+      <span class="hbar-val">${fmtBRL(val)}</span>
+    </div>`).join('');
+}
+
+function renderTrend() {
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) months.push(startOfMonth(addMonths(now, -i)));
+  const results = months.map(m => {
+    const w = computeWindow(m, endOfMonth(m), RAW.orders, RAW.items, RAW.despesas, RAW.productCostMap);
+    return { lbl: m.toLocaleDateString('pt-BR', { month: 'short' }), net: w.netProfit };
+  });
+  const max = Math.max(...results.map(r => Math.abs(r.net)), 1);
+  document.getElementById('trendChart').innerHTML = results.map(r => `
+    <div class="bar-col">
+      <span class="bar-val">${fmtBRL(r.net)}</span>
+      <div class="bar-fill${r.net < 0 ? ' neg' : ''}" style="height:${Math.max(Math.abs(r.net) / max * 140, 2)}px" title="${r.lbl}: ${fmtBRL(r.net)}"></div>
+      <span class="bar-lbl">${r.lbl}</span>
+    </div>`).join('');
+}
+
+function renderTopProfit(profitByProduct) {
+  const top = Object.values(profitByProduct).sort((a, b) => b.profit - a.profit).slice(0, 6);
+  const el = document.getElementById('topProfitChart');
+  if (!top.length) { el.innerHTML = '<div class="table-empty">Nenhuma venda no período.</div>'; return; }
+  const max = Math.max(...top.map(t => Math.abs(t.profit)), 1);
+  el.innerHTML = top.map(t => `
+    <div class="hbar-row">
+      <span class="hbar-lbl" title="${t.name}">${t.name}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${Math.abs(t.profit)/max*100}%;background:${t.profit < 0 ? 'var(--danger)' : 'var(--success)'};"></div></div>
+      <span class="hbar-val">${fmtBRL(t.profit)}</span>
+    </div>`).join('');
+}
+
+document.getElementById('periodTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  period = btn.dataset.p;
+  document.querySelectorAll('#periodTabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+});
+
+(async function () {
+  const session = await AdminShell.init('lucro');
+  if (!session) return;
+  await loadData();
+})();
+</script>
+</body>
+</html>

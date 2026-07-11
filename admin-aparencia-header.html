@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Header — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Aparência — Header</div></div>
+    <div class="admin-content" style="max-width:700px;">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">Comportamento</div>
+        <label class="chk-row" style="margin-bottom:14px;"><input type="checkbox" id="f_header_sticky"> Header fixo ao rolar a página (sticky)</label>
+        <div class="field"><label>Altura do header (px)</label><input type="number" id="f_header_height"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Barra de aviso (topo do site)</div>
+        <label class="chk-row" style="margin-bottom:14px;"><input type="checkbox" id="f_announcement_ativo"> Exibir barra de aviso</label>
+        <div class="field"><label>Texto</label><input id="f_announcement_texto" placeholder="Frete grátis nas compras acima de R$ 299"></div>
+        <div class="field"><label>Link (opcional)</label><input id="f_announcement_link_url" placeholder="categoria.html?cat=promocoes"></div>
+      </div>
+
+      <button class="btn btn-primary" id="saveBtn" style="margin-top:20px;">Salvar Alterações</button>
+      <span id="saveMsg" style="margin-left:12px;font-size:12.5px;color:var(--success);display:none;">Salvo!</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+async function load() {
+  const { data } = await window.sb.from('site_settings').select('*').eq('id', 1).single();
+  document.getElementById('f_header_sticky').checked = !!data.header_sticky;
+  document.getElementById('f_header_height').value = data.header_height || 72;
+  document.getElementById('f_announcement_ativo').checked = !!data.announcement_ativo;
+  document.getElementById('f_announcement_texto').value = data.announcement_texto || '';
+  document.getElementById('f_announcement_link_url').value = data.announcement_link_url || '';
+}
+
+async function save() {
+  const payload = {
+    header_sticky: document.getElementById('f_header_sticky').checked,
+    header_height: parseInt(document.getElementById('f_header_height').value) || 72,
+    announcement_ativo: document.getElementById('f_announcement_ativo').checked,
+    announcement_texto: document.getElementById('f_announcement_texto').value.trim() || null,
+    announcement_link_url: document.getElementById('f_announcement_link_url').value.trim() || null,
+  };
+  const { error } = await window.sb.from('site_settings').update(payload).eq('id', 1);
+  if (error) { AdminShell.toast('Erro ao salvar: ' + error.message, 'error'); return; }
+  const msg = document.getElementById('saveMsg');
+  msg.style.display = 'inline';
+  setTimeout(() => msg.style.display = 'none', 2200);
+}
+
+document.getElementById('saveBtn').addEventListener('click', save);
+
+(async function () {
+  const session = await AdminShell.init('aparencia-header');
+  if (!session) return;
+  await load();
+})();
+</script>
+</body>
+</html>

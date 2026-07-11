@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Páginas — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+<style>
+.core-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:26px;}
+.core-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:14px;display:flex;flex-direction:column;gap:6px;}
+.core-card b{font-size:13px;}
+.core-card span{font-size:11px;color:var(--text-muted);}
+.core-card a{font-size:11.5px;color:var(--primary);margin-top:4px;}
+.tipo-pill{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:var(--radius-full);background:var(--bg-section);color:var(--text-muted);}
+
+.pg-editor{display:none;}
+.pg-editor.open{display:block;}
+.pg-list-view.hidden{display:none;}
+.ed-layout{display:grid;grid-template-columns:1fr 420px;gap:20px;align-items:start;}
+@media(max-width:1100px){.ed-layout{grid-template-columns:1fr;}}
+#quillEditor{background:var(--bg-card);min-height:280px;color:var(--text-main);}
+.ql-toolbar{border-color:var(--border-color) !important;background:var(--bg-section);}
+.ql-container{border-color:var(--border-color) !important;font-size:14px;}
+.ql-snow .ql-stroke{stroke:var(--text-secondary);}
+.ql-snow .ql-picker{color:var(--text-secondary);}
+
+.device-tabs{display:flex;gap:4px;margin-bottom:10px;}
+.device-tabs button{padding:6px 11px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:11px;font-weight:700;cursor:pointer;border-radius:var(--radius-sm);}
+.device-tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.preview-frame-wrap{background:var(--bg-main);border:1px solid var(--border-color);height:520px;overflow:auto;display:flex;justify-content:center;border-radius:var(--radius-sm);}
+.preview-frame-wrap iframe{height:100%;border:none;flex-shrink:0;transition:width .2s;}
+.preview-frame-wrap iframe.device-desktop{width:100%;}
+.preview-frame-wrap iframe.device-tablet{width:480px;}
+.preview-frame-wrap iframe.device-celular{width:280px;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title" id="topTitle">Páginas</div>
+      <div class="admin-topbar-actions" id="topActions">
+        <button class="btn btn-primary" id="btnNovaPagina">+ Nova página</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <!-- LISTA -->
+      <div class="pg-list-view" id="listView">
+        <div class="card-title" style="margin-bottom:10px;">Páginas principais da loja</div>
+        <div class="core-grid" id="coreGrid"></div>
+
+        <div class="card-title" style="margin-bottom:10px;">Páginas de conteúdo (CMS)</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Título</th><th>Tipo</th><th>Status</th><th>Última alteração</th><th></th></tr></thead>
+            <tbody id="pagTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- EDITOR -->
+      <div class="pg-editor" id="editorView">
+        <button class="btn btn-secondary btn-sm" id="btnVoltar" style="margin-bottom:16px;">← Voltar pra lista</button>
+        <div class="ed-layout">
+          <div>
+            <div class="field-row">
+              <div class="field"><label>Título *</label><input id="f_titulo"></div>
+              <div class="field"><label>Slug (URL) *</label><input id="f_slug" placeholder="ex: politica-de-privacidade"></div>
+            </div>
+            <div class="field"><label>Subtítulo</label><input id="f_subtitulo"></div>
+            <div class="field"><label>Banner (opcional)</label><div id="uploadBanner"></div></div>
+
+            <div id="tipoEspecificoFields"></div>
+
+            <div class="field"><label>Conteúdo</label><div id="quillEditor"></div></div>
+
+            <details class="card" style="margin-top:16px;">
+              <summary style="cursor:pointer;font-weight:700;font-size:13px;">SEO</summary>
+              <div class="field" style="margin-top:12px;"><label>Título SEO</label><input id="f_seo_titulo"></div>
+              <div class="field"><label>Meta descrição</label><textarea id="f_seo_desc" style="min-height:70px;"></textarea></div>
+              <div class="field"><label>Imagem Open Graph (compartilhamento)</label><div id="uploadOg"></div></div>
+            </details>
+
+            <div class="field" style="margin-top:16px;"><label class="chk-row"><input type="checkbox" id="f_status"> Publicada (visível pro público)</label></div>
+
+            <div style="display:flex;gap:10px;margin-top:18px;">
+              <button class="btn btn-secondary" id="btnHistorico">Histórico</button>
+              <button class="btn btn-danger" id="btnExcluirPagina">Excluir</button>
+              <button class="btn btn-primary" id="btnSalvarPagina" style="margin-left:auto;">Salvar</button>
+            </div>
+          </div>
+          <div>
+            <div class="device-tabs">
+              <button class="active" data-device="desktop">Desktop</button>
+              <button data-device="tablet">Tablet</button>
+              <button data-device="celular">Celular</button>
+            </div>
+            <div class="preview-frame-wrap"><iframe id="previewFrame" class="device-desktop"></iframe></div>
+            <button class="btn btn-secondary btn-sm" id="btnAtualizarPreview" style="margin-top:10px;width:100%;">Atualizar preview</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="histModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-head"><div class="modal-title">Histórico da página</div><button class="modal-close" onclick="document.getElementById('histModal').classList.remove('open')">✕</button></div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Quando</th><th>Ação</th><th>Usuário</th><th></th></tr></thead>
+      <tbody id="histTbody"></tbody>
+    </table></div>
+    <div class="modal-foot"><button class="btn btn-secondary" onclick="document.getElementById('histModal').classList.remove('open')">Fechar</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-upload.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script>
+const CORE_PAGES = [
+  { nome: 'Homepage', desc: 'Hero, banners e seções', href: 'admin-aparencia-hero.html' },
+  { nome: 'Produto', desc: 'Blocos: galeria, descrição, avaliações', href: 'admin-aparencia-blocos.html' },
+  { nome: 'Categoria', desc: 'Blocos: filtros, grade de produtos', href: 'admin-aparencia-blocos.html' },
+  { nome: 'Carrinho', desc: 'Blocos: itens, ofertas', href: 'admin-aparencia-blocos.html' },
+  { nome: 'Checkout', desc: 'Blocos: contato, entrega, pagamento', href: 'admin-aparencia-blocos.html' },
+  { nome: 'Minha Conta', desc: 'Ordem do menu lateral', href: 'admin-aparencia-blocos.html' },
+  { nome: 'Design System', desc: 'Cores, tipografia e botões (todo o site)', href: 'admin-aparencia-cores.html' },
+];
+const TIPO_LABELS = { institucional: 'Institucional', contato: 'Contato', suporte: 'Suporte', pedido_concluido: 'Pedido Concluído', erro_404: 'Página 404', categorias_listagem: 'Listagem de Categorias' };
+const TIPO_TEMPLATE = { institucional: 'pagina.html', contato: 'contato.html', suporte: 'suporte.html', pedido_concluido: 'pedido-concluido.html', erro_404: '404.html', categorias_listagem: 'categorias.html' };
+
+let PAGINAS = [], editingId = null, quill = null, device = 'desktop', canEdit = false, canPublish = false;
+
+function fmtWhen(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('pt-BR') + ' ' + new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderCoreGrid() {
+  document.getElementById('coreGrid').innerHTML = CORE_PAGES.map(p => `
+    <div class="core-card"><b>${p.nome}</b><span>${p.desc}</span><a href="${p.href}">Editar →</a></div>`).join('');
+}
+
+async function loadPaginas() {
+  const { data } = await window.sb.from('paginas_cms').select('*').order('created_at');
+  PAGINAS = data || [];
+  renderList();
+}
+
+function renderList() {
+  document.getElementById('pagTbody').innerHTML = PAGINAS.length ? PAGINAS.map(p => `
+    <tr>
+      <td class="strong">${p.titulo}<div style="font-size:11px;color:var(--text-muted);">/${p.slug}</div></td>
+      <td><span class="tipo-pill">${TIPO_LABELS[p.tipo] || p.tipo}</span></td>
+      <td><span class="status-pill ${p.status === 'publicado' ? 'green' : 'gray'}">${p.status === 'publicado' ? 'Publicada' : 'Rascunho'}</span></td>
+      <td>${fmtWhen(p.updated_at)}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openEditor(${p.id})">${canEdit ? 'Editar' : 'Ver'}</button></td>
+    </tr>`).join('') : '<tr><td colspan="5" class="table-empty">Nenhuma página cadastrada.</td></tr>';
+}
+
+function slugify(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function ensureQuill() {
+  if (quill) return quill;
+  quill = new Quill('#quillEditor', {
+    theme: 'snow',
+    modules: { toolbar: [['bold', 'italic', 'underline'], [{ header: [2, 3, false] }], ['link', 'image'], [{ list: 'ordered' }, { list: 'bullet' }], ['clean']] },
+  });
+  return quill;
+}
+
+function renderTipoFields(tipo, config) {
+  config = config || {};
+  const wrap = document.getElementById('tipoEspecificoFields');
+  if (tipo === 'contato' || tipo === 'suporte') {
+    wrap.innerHTML = `
+      <div class="field-row">
+        <div class="field"><label>WhatsApp</label><input id="f_cfg_whatsapp" value="${config.whatsapp || ''}" placeholder="5565999999999"></div>
+        <div class="field"><label>E-mail</label><input id="f_cfg_email" value="${config.email || ''}" placeholder="contato@alfainformatica.com"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Horário de atendimento</label><input id="f_cfg_horario" value="${config.horario || ''}" placeholder="Seg a sex, 9h às 18h"></div>
+        <div class="field"><label>Link do mapa (opcional)</label><input id="f_cfg_mapa" value="${config.mapa_url || ''}" placeholder="https://maps.google.com/..."></div>
+      </div>`;
+  } else {
+    wrap.innerHTML = '';
+  }
+}
+function coletarConfig(tipo) {
+  if (tipo === 'contato' || tipo === 'suporte') {
+    return {
+      whatsapp: document.getElementById('f_cfg_whatsapp').value.trim(),
+      email: document.getElementById('f_cfg_email').value.trim(),
+      horario: document.getElementById('f_cfg_horario').value.trim(),
+      mapa_url: document.getElementById('f_cfg_mapa').value.trim(),
+    };
+  }
+  return {};
+}
+
+let currentTipo = 'institucional', currentBanner = '', currentOg = '';
+
+window.openEditor = function (id) {
+  editingId = id;
+  const p = id ? PAGINAS.find(x => x.id === id) : null;
+  currentTipo = p ? p.tipo : 'institucional';
+  currentBanner = p ? (p.banner_url || '') : '';
+  currentOg = p ? (p.seo_og_image_url || '') : '';
+
+  document.getElementById('listView').classList.add('hidden');
+  document.getElementById('editorView').classList.add('open');
+  document.getElementById('topTitle').textContent = p ? 'Editar página' : 'Nova página';
+
+  document.getElementById('f_titulo').value = p ? p.titulo : '';
+  document.getElementById('f_slug').value = p ? p.slug : '';
+  document.getElementById('f_subtitulo').value = p ? (p.subtitulo || '') : '';
+  document.getElementById('f_seo_titulo').value = p ? (p.seo_titulo || '') : '';
+  document.getElementById('f_seo_desc').value = p ? (p.seo_description || '') : '';
+  document.getElementById('f_status').checked = p ? p.status === 'publicado' : false;
+
+  renderTipoFields(currentTipo, p ? p.configuracoes : {});
+  AdminUpload.mountField(document.getElementById('uploadBanner'), 'paginas', currentBanner, url => currentBanner = url);
+  AdminUpload.mountField(document.getElementById('uploadOg'), 'paginas', currentOg, url => currentOg = url);
+
+  ensureQuill();
+  quill.root.innerHTML = p ? (p.conteudo_html || '') : '';
+
+  document.getElementById('btnExcluirPagina').style.display = (p && canEdit) ? '' : 'none';
+  document.getElementById('btnHistorico').style.display = p ? '' : 'none';
+  updatePreview();
+};
+
+document.getElementById('btnVoltar').addEventListener('click', () => {
+  document.getElementById('listView').classList.remove('hidden');
+  document.getElementById('editorView').classList.remove('open');
+  document.getElementById('topTitle').textContent = 'Páginas';
+  loadPaginas();
+});
+
+document.getElementById('btnNovaPagina').addEventListener('click', () => openEditor(null));
+
+function currentSlugPreviewUrl(slug, tipo) {
+  const tpl = TIPO_TEMPLATE[tipo] || 'pagina.html';
+  const sep = tpl.indexOf('?') === -1 ? '?' : '&';
+  if (tipo === 'institucional') return tpl + sep + 'slug=' + encodeURIComponent(slug) + '&alfa_admin_test=1';
+  return tpl + sep + 'alfa_admin_test=1';
+}
+function updatePreview() {
+  const slug = document.getElementById('f_slug').value.trim() || 'preview';
+  document.getElementById('previewFrame').src = currentSlugPreviewUrl(slug, currentTipo);
+}
+document.getElementById('btnAtualizarPreview').addEventListener('click', updatePreview);
+document.querySelectorAll('.device-tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    device = btn.dataset.device;
+    document.querySelectorAll('.device-tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('previewFrame').className = 'device-' + device;
+  });
+});
+
+document.getElementById('f_titulo').addEventListener('input', function () {
+  if (!editingId && !document.getElementById('f_slug').dataset.touched) document.getElementById('f_slug').value = slugify(this.value);
+});
+document.getElementById('f_slug').addEventListener('input', function () { this.dataset.touched = '1'; });
+
+async function logHistorico(entidadeId, acao, antes, depois) {
+  const { data: { user } } = await window.sb.auth.getUser();
+  await window.sb.from('conteudo_historico').insert({
+    entidade: 'pagina_cms', entidade_id: String(entidadeId), acao,
+    dados_anteriores: antes || null, dados_novos: depois || null, usuario_id: user ? user.id : null,
+  });
+}
+
+document.getElementById('btnSalvarPagina').addEventListener('click', async () => {
+  const titulo = document.getElementById('f_titulo').value.trim();
+  const slug = document.getElementById('f_slug').value.trim();
+  if (!titulo || !slug) { AdminShell.toast('Preencha título e slug.', 'error'); return; }
+
+  const statusNovo = document.getElementById('f_status').checked ? 'publicado' : 'rascunho';
+  if (statusNovo === 'publicado' && !canPublish) { AdminShell.toast('Você não tem permissão pra publicar páginas.', 'error'); return; }
+
+  const payload = {
+    titulo, slug, tipo: currentTipo,
+    subtitulo: document.getElementById('f_subtitulo').value.trim() || null,
+    banner_url: currentBanner || null,
+    conteudo_html: quill.root.innerHTML,
+    seo_titulo: document.getElementById('f_seo_titulo').value.trim() || null,
+    seo_description: document.getElementById('f_seo_desc').value.trim() || null,
+    seo_og_image_url: currentOg || null,
+    configuracoes: coletarConfig(currentTipo),
+    status: statusNovo,
+  };
+
+  const before = editingId ? PAGINAS.find(x => x.id === editingId) : null;
+  const { data: { user } } = await window.sb.auth.getUser();
+  payload.updated_by = user ? user.id : null;
+
+  let result;
+  if (editingId) result = await window.sb.from('paginas_cms').update(payload).eq('id', editingId).select().single();
+  else { payload.created_by = user ? user.id : null; result = await window.sb.from('paginas_cms').insert(payload).select().single(); }
+
+  if (result.error) { AdminShell.toast(/duplicate|unique/i.test(result.error.message) ? 'Já existe uma página com esse slug.' : 'Erro: ' + result.error.message, 'error'); return; }
+  await logHistorico(result.data.id, editingId ? 'editado' : 'criado', before, result.data);
+  AdminShell.toast('Página salva!', 'success');
+  editingId = result.data.id;
+  await loadPaginas();
+  updatePreview();
+});
+
+document.getElementById('btnExcluirPagina').addEventListener('click', async () => {
+  if (!editingId || !confirm('Excluir esta página permanentemente?')) return;
+  const before = PAGINAS.find(x => x.id === editingId);
+  const { error } = await window.sb.from('paginas_cms').delete().eq('id', editingId);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico(editingId, 'excluido', before, null);
+  document.getElementById('btnVoltar').click();
+});
+
+document.getElementById('btnHistorico').addEventListener('click', async () => {
+  const { data } = await window.sb.from('conteudo_historico').select('*')
+    .eq('entidade', 'pagina_cms').eq('entidade_id', String(editingId)).order('created_at', { ascending: false }).limit(50);
+  const ids = [...new Set((data || []).map(h => h.usuario_id).filter(Boolean))];
+  let profiles = {};
+  if (ids.length) {
+    const { data: profs } = await window.sb.from('profiles').select('id,full_name').in('id', ids);
+    (profs || []).forEach(p => { profiles[p.id] = p.full_name; });
+  }
+  document.getElementById('histTbody').innerHTML = (data || []).length ? data.map(h => `
+    <tr>
+      <td>${fmtWhen(h.created_at)}</td>
+      <td><span class="status-pill blue">${h.acao}</span></td>
+      <td>${profiles[h.usuario_id] || '—'}</td>
+      <td>${h.dados_anteriores ? `<button class="btn btn-secondary btn-sm" onclick='restaurar(${JSON.stringify(h.dados_anteriores).replace(/'/g,"&apos;")})'>Restaurar</button>` : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="4" class="table-empty">Nenhuma alteração ainda.</td></tr>';
+  document.getElementById('histModal').classList.add('open');
+});
+
+window.restaurar = async function (snapshot) {
+  if (!confirm('Restaurar esta versão da página?')) return;
+  const dados = Object.assign({}, snapshot);
+  delete dados.id; delete dados.created_at; delete dados.updated_at;
+  const before = PAGINAS.find(x => x.id === editingId);
+  const { data, error } = await window.sb.from('paginas_cms').update(dados).eq('id', editingId).select().single();
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  await logHistorico(editingId, 'restaurado', before, data);
+  document.getElementById('histModal').classList.remove('open');
+  await loadPaginas();
+  openEditor(editingId);
+};
+
+(async function () {
+  const session = await AdminShell.init('aparencia-paginas');
+  if (!session) return;
+  canEdit = AdminShell.can('paginas.editar');
+  canPublish = AdminShell.can('paginas.publicar');
+  if (!canEdit) {
+    document.getElementById('btnNovaPagina').style.display = 'none';
+    document.getElementById('btnSalvarPagina').style.display = 'none';
+  }
+  renderCoreGrid();
+  await loadPaginas();
+})();
+</script>
+</body>
+</html>

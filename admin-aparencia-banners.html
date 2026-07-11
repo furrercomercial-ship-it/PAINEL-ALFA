@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Banners — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.slide-card{background:var(--bg-card);border:1px solid var(--border-color);padding:16px 18px;margin-bottom:12px;display:grid;grid-template-columns:90px 1fr auto;gap:16px;align-items:center;}
+.slide-thumb{width:90px;height:90px;background:var(--bg-main);overflow:hidden;}
+.slide-thumb img{width:100%;height:100%;object-fit:cover;}
+.slide-info-title{font-weight:700;font-size:13px;margin-bottom:3px;}
+.slide-info-sub{font-size:11.5px;color:var(--text-muted);}
+.ord-btns{display:flex;flex-direction:column;gap:1px;}
+.ord-btns button{background:transparent;border:1px solid var(--border-color);color:var(--text-muted);cursor:pointer;width:20px;height:16px;font-size:9px;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Aparência — Banners</div>
+      <div class="admin-topbar-actions"><button class="btn btn-primary" id="newBtn">+ Novo Banner</button></div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <div class="field" style="max-width:280px;margin-bottom:18px;">
+        <label>Local de exibição</label>
+        <select id="placementFilter">
+          <option value="ofertas_home">Ofertas em Destaque (Home)</option>
+        </select>
+      </div>
+      <div id="bannersList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="bannerModal">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="modalTitle">Novo Banner</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Imagem *</label><div id="uploadBannerImg"></div></div>
+    <div class="field"><label>Título (interno, opcional)</label><input id="f_titulo"></div>
+    <div class="field-row">
+      <div class="field"><label>Link de destino</label><input id="f_link_url" placeholder="produto.html?id=6"></div>
+      <div class="field"><label>Texto do botão</label><input id="f_cta_label" placeholder="Conferir"></div>
+    </div>
+    <label class="chk-row"><input type="checkbox" id="f_ativo" checked> Ativo</label>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-upload.js"></script>
+<script>
+let BANNERS = [];
+let editingId = null;
+let currentImg = '';
+
+async function load() {
+  const placement = document.getElementById('placementFilter').value;
+  const { data } = await window.sb.from('banners').select('*').eq('placement', placement).order('ordem');
+  BANNERS = data || [];
+  render();
+}
+
+function render() {
+  const el = document.getElementById('bannersList');
+  if (!BANNERS.length) { el.innerHTML = '<div class="table-empty">Nenhum banner cadastrado. Clique em "+ Novo Banner".</div>'; return; }
+  el.innerHTML = BANNERS.map((b, i) => `
+    <div class="slide-card">
+      <div class="slide-thumb"><img src="${b.imagem_url}" alt=""></div>
+      <div>
+        <div class="slide-info-title">${b.titulo || '(sem título)'} ${b.ativo ? '' : '<span class="status-pill gray">Inativo</span>'}</div>
+        <div class="slide-info-sub">${b.link_url || 'sem link'} ${b.cta_label ? '· "' + b.cta_label + '"' : ''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="ord-btns">
+          <button onclick="move(${b.id},-1)" ${i===0?'disabled':''}>▲</button>
+          <button onclick="move(${b.id},1)" ${i===BANNERS.length-1?'disabled':''}>▼</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openEdit(${b.id})">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="remove(${b.id})">Excluir</button>
+      </div>
+    </div>`).join('');
+}
+
+function openModal() { document.getElementById('bannerModal').classList.add('open'); }
+function closeModal() { document.getElementById('bannerModal').classList.remove('open'); }
+
+document.getElementById('newBtn').addEventListener('click', () => {
+  editingId = null; currentImg = '';
+  document.getElementById('modalTitle').textContent = 'Novo Banner';
+  ['titulo','link_url','cta_label'].forEach(f => document.getElementById('f_' + f).value = '');
+  document.getElementById('f_ativo').checked = true;
+  AdminUpload.mountField(document.getElementById('uploadBannerImg'), 'banners', '', url => currentImg = url);
+  openModal();
+});
+
+window.openEdit = function (id) {
+  const b = BANNERS.find(x => x.id === id);
+  if (!b) return;
+  editingId = id; currentImg = b.imagem_url;
+  document.getElementById('modalTitle').textContent = 'Editar Banner';
+  document.getElementById('f_titulo').value = b.titulo || '';
+  document.getElementById('f_link_url').value = b.link_url || '';
+  document.getElementById('f_cta_label').value = b.cta_label || '';
+  document.getElementById('f_ativo').checked = !!b.ativo;
+  AdminUpload.mountField(document.getElementById('uploadBannerImg'), 'banners', b.imagem_url, url => currentImg = url);
+  openModal();
+};
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  if (!currentImg) { AdminShell.toast('Escolha uma imagem.', 'error'); return; }
+  const payload = {
+    placement: document.getElementById('placementFilter').value,
+    imagem_url: currentImg,
+    titulo: document.getElementById('f_titulo').value.trim() || null,
+    link_url: document.getElementById('f_link_url').value.trim() || null,
+    cta_label: document.getElementById('f_cta_label').value.trim() || null,
+    ativo: document.getElementById('f_ativo').checked,
+  };
+  let error;
+  if (editingId) {
+    ({ error } = await window.sb.from('banners').update(payload).eq('id', editingId));
+  } else {
+    payload.ordem = BANNERS.length;
+    ({ error } = await window.sb.from('banners').insert(payload));
+  }
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Banner salvo com sucesso!', 'success');
+  closeModal();
+  load();
+});
+
+window.remove = async function (id) {
+  if (!confirm('Excluir este banner?')) return;
+  await window.sb.from('banners').delete().eq('id', id);
+  load();
+};
+
+window.move = async function (id, dir) {
+  const idx = BANNERS.findIndex(b => b.id === id);
+  const swap = BANNERS[idx + dir];
+  if (!swap) return;
+  await Promise.all([
+    window.sb.from('banners').update({ ordem: swap.ordem }).eq('id', BANNERS[idx].id),
+    window.sb.from('banners').update({ ordem: BANNERS[idx].ordem }).eq('id', swap.id),
+  ]);
+  load();
+};
+
+document.getElementById('placementFilter').addEventListener('change', load);
+
+(async function () {
+  const session = await AdminShell.init('aparencia-banners');
+  if (!session) return;
+  await load();
+})();
+</script>
+</body>
+</html>

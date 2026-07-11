@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Avaliações — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+.tab-btn{padding:9px 18px;border:1px solid var(--border-color);border-radius:0;background:var(--bg-card);color:var(--text-secondary);font-size:12.5px;font-weight:700;cursor:pointer;transition:all .15s;}
+.tab-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.tab-btn .cnt{opacity:.75;margin-left:5px;}
+
+.rv-list{display:flex;flex-direction:column;gap:14px;}
+.rv-card{background:var(--bg-card);border:1px solid var(--border-color);padding:20px 22px;}
+.rv-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:10px;flex-wrap:wrap;}
+.rv-prod{font-size:12.5px;color:var(--primary);font-weight:700;}
+.rv-prod:hover{text-decoration:underline;}
+.rv-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;}
+.rv-name{font-size:13.5px;font-weight:700;}
+.rv-date{font-size:11.5px;color:var(--text-muted);}
+.rv-stars{display:inline-flex;gap:1px;}
+.rv-title{font-size:13.5px;font-weight:700;margin:8px 0 4px;}
+.rv-comment{font-size:13px;color:var(--text-secondary);line-height:1.6;}
+.rv-media{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.rv-media img,.rv-media video{width:70px;height:70px;object-fit:cover;border:1px solid var(--border-color);}
+.rv-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Avaliações</div></div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <div class="tabs" id="tabsArea"></div>
+      <div id="listArea"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+let activeTab = 'pending';
+let ALL_REVIEWS = [];
+let canModerate = false;
+const PRODUCT_NAMES = {};
+
+function starsHtml(n) {
+  let out = '<span class="rv-stars">';
+  for (let i = 1; i <= 5; i++) {
+    out += `<svg width="14" height="14" viewBox="0 0 24 24" fill="${i<=n?'#F59E0B':'none'}" stroke="${i<=n?'#F59E0B':'var(--text-muted)'}" stroke-width="1.5"><polygon points="12 2 15 8.5 22 9.3 17 14 18.5 21 12 17.5 5.5 21 7 14 2 9.3 9 8.5"/></svg>`;
+  }
+  return out + '</span>';
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('pt-BR') + ' ' + new Date(iso).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+}
+
+async function loadReviews() {
+  const { data, error } = await window.sb.from('reviews').select('*').order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+  ALL_REVIEWS = data || [];
+
+  const ids = [...new Set(ALL_REVIEWS.map(r => r.product_id))];
+  if (ids.length) {
+    const { data: prods } = await window.sb.from('products').select('id,name').in('id', ids);
+    (prods || []).forEach(p => { PRODUCT_NAMES[p.id] = p.name; });
+  }
+  renderTabs();
+  renderList();
+}
+
+function renderTabs() {
+  const counts = {
+    pending: ALL_REVIEWS.filter(r => r.status === 'pending').length,
+    approved: ALL_REVIEWS.filter(r => r.status === 'approved').length,
+    rejected: ALL_REVIEWS.filter(r => r.status === 'rejected').length,
+    all: ALL_REVIEWS.length,
+  };
+  const tabs = [
+    {id:'pending', label:'Pendentes'},
+    {id:'approved', label:'Aprovadas'},
+    {id:'rejected', label:'Rejeitadas'},
+    {id:'all', label:'Todas'},
+  ];
+  document.getElementById('tabsArea').innerHTML = tabs.map(t =>
+    `<button class="tab-btn ${activeTab===t.id?'active':''}" onclick="selectTab('${t.id}')">${t.label}<span class="cnt">${counts[t.id]}</span></button>`
+  ).join('');
+}
+
+function selectTab(id) { activeTab = id; renderTabs(); renderList(); }
+
+function renderList() {
+  const list = activeTab === 'all' ? ALL_REVIEWS : ALL_REVIEWS.filter(r => r.status === activeTab);
+  const area = document.getElementById('listArea');
+  if (!list.length) { area.innerHTML = '<div class="table-empty">Nenhuma avaliação nesta aba.</div>'; return; }
+  const statusColor = { pending: 'amber', approved: 'green', rejected: 'red' };
+  const statusLabel = { pending: 'Pendente', approved: 'Aprovada', rejected: 'Rejeitada' };
+
+  area.innerHTML = '<div class="rv-list">' + list.map(r => `
+    <div class="rv-card">
+      <div class="rv-top">
+        <div>
+          <a class="rv-prod" href="produto.html?id=${encodeURIComponent(r.product_id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(PRODUCT_NAMES[r.product_id] || ('Produto #' + r.product_id))}</a>
+          <div class="rv-meta">
+            <span class="rv-name">${escapeHtml(r.customer_name || 'Cliente')}</span>
+            ${starsHtml(r.rating)}
+            <span class="rv-date">${fmtDate(r.created_at)}</span>
+          </div>
+        </div>
+        <span class="status-pill ${statusColor[r.status]}">${statusLabel[r.status]}</span>
+      </div>
+      ${r.title ? `<div class="rv-title">${escapeHtml(r.title)}</div>` : ''}
+      <div class="rv-comment">${escapeHtml(r.comment)}</div>
+      ${(r.media_urls && r.media_urls.length) ? `<div class="rv-media">${r.media_urls.map(m =>
+        (m.type||'').startsWith('video') ? `<video src="${m.url}" controls></video>` : `<img src="${m.url}" alt="">`
+      ).join('')}</div>` : ''}
+      ${canModerate ? `<div class="rv-actions">
+        ${r.status !== 'approved' ? `<button class="btn btn-success btn-sm" onclick="approveReview('${r.id}')">Aprovar</button>` : ''}
+        ${r.status !== 'rejected' ? `<button class="btn btn-secondary btn-sm" onclick="rejectReview('${r.id}')">Rejeitar</button>` : ''}
+        <button class="btn btn-danger btn-sm" onclick="removeReview('${r.id}')">Excluir</button>
+      </div>` : ''}
+    </div>`).join('') + '</div>';
+}
+
+window.approveReview = async function (id) { await window.sb.from('reviews').update({ status: 'approved' }).eq('id', id); loadReviews(); };
+window.rejectReview = async function (id) { await window.sb.from('reviews').update({ status: 'rejected' }).eq('id', id); loadReviews(); };
+window.removeReview = async function (id) {
+  if (!confirm('Excluir esta avaliação permanentemente?')) return;
+  await window.sb.from('reviews').delete().eq('id', id);
+  loadReviews();
+};
+
+(async function () {
+  const session = await AdminShell.init('avaliacoes');
+  if (!session) return;
+  canModerate = AdminShell.can('avaliacoes.moderar');
+  await loadReviews();
+})();
+</script>
+</body>
+</html>

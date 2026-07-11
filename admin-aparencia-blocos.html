@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blocos — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.page-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+.page-tabs button{padding:9px 16px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:12.5px;font-weight:700;cursor:pointer;border-radius:var(--radius-sm);}
+.page-tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+.blk-list{max-width:760px;}
+.blk-row{display:flex;align-items:center;gap:12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;}
+.blk-row.locked{opacity:.85;}
+.blk-row.sortable-ghost{opacity:.3;}
+.blk-row.sortable-chosen{box-shadow:var(--shadow-md);}
+.blk-drag{cursor:grab;color:var(--text-muted);flex-shrink:0;width:18px;height:18px;touch-action:none;}
+.blk-drag:active{cursor:grabbing;}
+.blk-info{flex:1;min-width:0;}
+.blk-name{font-size:13.5px;font-weight:700;color:var(--text-main);}
+.blk-key{font-size:10.5px;color:var(--text-muted);}
+.blk-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.blk-actions select{font-size:11.5px;padding:6px 8px;border:1px solid var(--border-color);background:var(--bg-main);color:var(--text-main);border-radius:var(--radius-sm);}
+.blk-icon-btn{width:32px;height:32px;border:1px solid var(--border-color);background:var(--bg-main);color:var(--text-secondary);border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.blk-icon-btn.on{color:var(--primary);border-color:var(--primary);background:var(--primary-soft);}
+.blk-icon-btn svg{width:15px;height:15px;}
+.blk-arrows{display:flex;flex-direction:column;gap:1px;}
+.blk-arrows button{background:transparent;border:1px solid var(--border-color);color:var(--text-muted);cursor:pointer;width:20px;height:16px;font-size:9px;line-height:1;border-radius:2px;}
+.blk-arrows button:hover:not(:disabled){color:var(--text-main);}
+.blk-arrows button:disabled{opacity:.3;cursor:default;}
+
+.blk-hint{font-size:11.5px;color:var(--text-muted);margin-bottom:16px;max-width:700px;line-height:1.5;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Blocos das Páginas</div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-secondary" id="undoBtn" disabled>↶ Desfazer</button>
+        <button class="btn btn-secondary" id="redoBtn" disabled>↷ Refazer</button>
+        <button class="btn btn-secondary" id="resetBtn">Restaurar ordem padrão</button>
+        <button class="btn btn-primary" id="saveBtn">Salvar</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+      <p class="blk-hint">Arraste pelo ícone <b>⠿</b> pra reordenar, ou use as setas (funciona também por teclado). O olho mostra/oculta o bloco no site; o cadeado impede que ele seja movido sem querer. As setas de dispositivo restringem onde o bloco aparece.</p>
+
+      <div class="page-tabs" id="pageTabs">
+        <button class="active" data-page="produto">Produto</button>
+        <button data-page="categoria">Categoria</button>
+        <button data-page="carrinho">Carrinho</button>
+        <button data-page="checkout">Checkout</button>
+        <button data-page="minha_conta">Minha Conta</button>
+      </div>
+
+      <div class="blk-list" id="blkList"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+const LABELS = {
+  principal: 'Galeria + Preço + Compra', descricao_especificacoes: 'Descrição / Especificações', avaliacoes: 'Avaliações',
+  breadcrumb: 'Breadcrumb', cat_header: 'Título + Ordenação', subcategorias: 'Subcategorias', grid_produtos: 'Grade de produtos',
+  itens: 'Itens do carrinho', ofertas: 'Ofertas e Promoções',
+  contato: 'Contato', entrega: 'Entrega', envio: 'Método de Envio', pagamento: 'Pagamento',
+  pedidos: 'Meus Pedidos', dados: 'Meus Dados', enderecos: 'Endereços', favoritos: 'Favoritos',
+};
+const DEFAULT_ORDER = {
+  produto: ['principal','descricao_especificacoes','avaliacoes'],
+  categoria: ['breadcrumb','cat_header','subcategorias','grid_produtos'],
+  carrinho: ['itens','ofertas'],
+  checkout: ['contato','entrega','envio','pagamento'],
+  minha_conta: ['pedidos','dados','enderecos','favoritos'],
+};
+
+let currentPage = 'produto';
+let BLOCKS = [];
+let loadedAt = null; // maior updated_at no momento do load, pra checagem de conflito
+let undoStack = [], redoStack = [];
+let sortable = null;
+let canEdit = false;
+
+function snapshot() { return JSON.parse(JSON.stringify(BLOCKS)); }
+function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 30) undoStack.shift(); redoStack = []; updateUndoRedoBtns(); }
+function updateUndoRedoBtns() {
+  document.getElementById('undoBtn').disabled = !undoStack.length;
+  document.getElementById('redoBtn').disabled = !redoStack.length;
+}
+
+async function loadBlocks(pageKey) {
+  const { data } = await window.sb.from('page_blocks').select('*').eq('page_key', pageKey).order('ordem');
+  BLOCKS = data || [];
+  loadedAt = BLOCKS.reduce((max, b) => b.updated_at > max ? b.updated_at : max, '');
+  undoStack = []; redoStack = [];
+  updateUndoRedoBtns();
+  render();
+}
+
+function iconEye(on) {
+  return on
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a20.3 20.3 0 015.06-6.06M9.9 4.24A10.4 10.4 0 0112 4c7 0 11 8 11 8a20.3 20.3 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+}
+function iconLock(on) {
+  return on
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-2"/></svg>';
+}
+
+function render() {
+  const wrap = document.getElementById('blkList');
+  wrap.innerHTML = BLOCKS.map((b, i) => `
+    <div class="blk-row ${b.bloqueado ? 'locked' : ''}" data-key="${b.block_key}">
+      <div class="blk-drag" title="Arrastar pra reordenar">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+      </div>
+      <div class="blk-arrows">
+        <button type="button" onclick="moveBlock(${i},-1)" ${i === 0 || b.bloqueado ? 'disabled' : ''} title="Mover pra cima">▲</button>
+        <button type="button" onclick="moveBlock(${i},1)" ${i === BLOCKS.length - 1 || b.bloqueado ? 'disabled' : ''} title="Mover pra baixo">▼</button>
+      </div>
+      <div class="blk-info">
+        <div class="blk-name">${LABELS[b.block_key] || b.block_key}</div>
+        <div class="blk-key">chave: ${b.block_key}</div>
+      </div>
+      <div class="blk-actions">
+        <select onchange="setDevice('${b.block_key}',this.value)" ${canEdit ? '' : 'disabled'}>
+          <option value="todos" ${b.visibilidade === 'todos' ? 'selected' : ''}>Todos</option>
+          <option value="desktop" ${b.visibilidade === 'desktop' ? 'selected' : ''}>Só desktop</option>
+          <option value="celular" ${b.visibilidade === 'celular' ? 'selected' : ''}>Só celular</option>
+        </select>
+        <button type="button" class="blk-icon-btn ${b.visivel ? 'on' : ''}" onclick="toggleVisivel('${b.block_key}')" title="Mostrar/ocultar" ${canEdit ? '' : 'disabled'}>${iconEye(b.visivel)}</button>
+        <button type="button" class="blk-icon-btn ${b.bloqueado ? 'on' : ''}" onclick="toggleLock('${b.block_key}')" title="Bloquear posição" ${canEdit ? '' : 'disabled'}>${iconLock(b.bloqueado)}</button>
+      </div>
+    </div>`).join('');
+
+  if (sortable) sortable.destroy();
+  sortable = new Sortable(wrap, {
+    animation: 180,
+    handle: '.blk-drag',
+    filter: '.locked',
+    onMove: function (evt) { return !evt.related.classList.contains('locked'); },
+    onEnd: function (evt) {
+      if (evt.oldIndex === evt.newIndex) return;
+      pushUndo();
+      const moved = BLOCKS.splice(evt.oldIndex, 1)[0];
+      BLOCKS.splice(evt.newIndex, 0, moved);
+      render();
+    },
+  });
+}
+
+window.moveBlock = function (i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= BLOCKS.length || BLOCKS[i].bloqueado || BLOCKS[j].bloqueado) return;
+  pushUndo();
+  const tmp = BLOCKS[i]; BLOCKS[i] = BLOCKS[j]; BLOCKS[j] = tmp;
+  render();
+};
+window.toggleVisivel = function (key) {
+  pushUndo();
+  const b = BLOCKS.find(x => x.block_key === key);
+  b.visivel = !b.visivel;
+  render();
+};
+window.toggleLock = function (key) {
+  pushUndo();
+  const b = BLOCKS.find(x => x.block_key === key);
+  b.bloqueado = !b.bloqueado;
+  render();
+};
+window.setDevice = function (key, val) {
+  pushUndo();
+  const b = BLOCKS.find(x => x.block_key === key);
+  b.visibilidade = val;
+  render();
+};
+
+document.getElementById('undoBtn').addEventListener('click', () => {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  BLOCKS = undoStack.pop();
+  updateUndoRedoBtns();
+  render();
+});
+document.getElementById('redoBtn').addEventListener('click', () => {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  BLOCKS = redoStack.pop();
+  updateUndoRedoBtns();
+  render();
+});
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Restaurar a ordem padrão desta página? Isso não mexe em mostrar/ocultar nem em dispositivo, só na ordem.')) return;
+  pushUndo();
+  const order = DEFAULT_ORDER[currentPage] || [];
+  BLOCKS.sort((a, b) => order.indexOf(a.block_key) - order.indexOf(b.block_key));
+  render();
+});
+
+document.getElementById('pageTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  currentPage = btn.dataset.page;
+  document.querySelectorAll('#pageTabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadBlocks(currentPage);
+});
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  // Checagem otimista: se alguém mudou esta página desde que carreguei, avisa
+  // em vez de sobrescrever sem querer (não é colaboração em tempo real, só
+  // evita o cenário mais comum de dois admins mexendo na mesma tela).
+  const { data: freshRows } = await window.sb.from('page_blocks').select('updated_at').eq('page_key', currentPage);
+  const freshMax = (freshRows || []).reduce((max, r) => r.updated_at > max ? r.updated_at : max, '');
+  if (freshMax && loadedAt && freshMax > loadedAt) {
+    if (!confirm('Alguém mais alterou esses blocos enquanto você editava. Recarregar e perder suas mudanças não salvas?')) return;
+    await loadBlocks(currentPage);
+    return;
+  }
+
+  const { data: { user } } = await window.sb.auth.getUser();
+  const antes = await window.sb.from('page_blocks').select('*').eq('page_key', currentPage);
+  const updates = BLOCKS.map((b, i) => window.sb.from('page_blocks').update({
+    ordem: i, visivel: b.visivel, visibilidade: b.visibilidade, bloqueado: b.bloqueado, updated_by: user ? user.id : null,
+  }).eq('id', b.id));
+  const results = await Promise.all(updates);
+  const err = results.find(r => r.error);
+  if (err) { AdminShell.toast('Erro: ' + err.error.message, 'error'); return; }
+
+  await window.sb.from('conteudo_historico').insert({
+    entidade: 'page_block', entidade_id: currentPage, acao: 'reordenado',
+    dados_anteriores: antes.data, dados_novos: BLOCKS, usuario_id: user ? user.id : null,
+  });
+
+  AdminShell.toast('Blocos salvos!', 'success');
+  await loadBlocks(currentPage);
+});
+
+(async function () {
+  const session = await AdminShell.init('aparencia-blocos');
+  if (!session) return;
+  canEdit = AdminShell.can('blocos.editar');
+  if (!canEdit) document.querySelectorAll('#undoBtn,#redoBtn,#resetBtn,#saveBtn').forEach(b => b.style.display = 'none');
+  await loadBlocks(currentPage);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Homepage — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.sec-row{background:var(--bg-card);border:1px solid var(--border-color);padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+.sec-row-title{font-weight:700;font-size:13.5px;flex:1;}
+.sec-row-sub{font-size:11.5px;color:var(--text-muted);margin-top:2px;}
+.ord-btns{display:flex;flex-direction:column;gap:1px;}
+.ord-btns button{background:transparent;border:1px solid var(--border-color);color:var(--text-muted);cursor:pointer;width:20px;height:16px;font-size:9px;}
+.toggle-switch{position:relative;width:38px;height:22px;flex-shrink:0;}
+.toggle-switch input{opacity:0;width:100%;height:100%;position:absolute;cursor:pointer;margin:0;z-index:1;}
+.toggle-switch .track{position:absolute;inset:0;background:var(--border-color);transition:background .15s;}
+.toggle-switch .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;transition:left .15s;}
+.toggle-switch input:checked + .track{background:var(--success);}
+.toggle-switch input:checked ~ .knob{left:18px;}
+.section-title{font-size:15px;font-weight:800;margin:28px 0 14px;}
+.section-title:first-child{margin-top:0;}
+.cat-row{display:flex;align-items:center;gap:12px;background:var(--bg-card);border:1px solid var(--border-color);padding:10px 16px;margin-bottom:8px;}
+.cat-row img{width:36px;height:36px;object-fit:cover;background:var(--bg-main);flex-shrink:0;}
+.cat-row-name{flex:1;font-size:13px;font-weight:600;}
+.drag-handle{cursor:grab;color:var(--text-muted);flex-shrink:0;width:18px;height:18px;touch-action:none;}
+.drag-handle:active{cursor:grabbing;}
+.sec-row.sortable-ghost,.cat-row.sortable-ghost{opacity:.3;}
+.sec-row.sortable-chosen,.cat-row.sortable-chosen{box-shadow:var(--shadow-md);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Aparência — Homepage</div></div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="section-title">Seções da Página Inicial</div>
+      <div class="field-hint" style="margin-bottom:14px;">Reordene, oculte ou renomeie as seções da home. O conteúdo de cada seção (quais produtos aparecem, etc.) continua automático.</div>
+      <div id="sectionsList"></div>
+
+      <div class="section-title">Categorias em Destaque na Home</div>
+      <div class="field-hint" style="margin-bottom:14px;">Marque quais categorias aparecem na home e em que ordem.</div>
+      <div id="categoriesList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head"><div class="modal-title">Editar Seção</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Título (deixe vazio para usar o padrão)</label><input id="f_titulo"></div>
+    <div class="field"><label>Subtítulo (deixe vazio para usar o padrão)</label><input id="f_subtitulo"></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveSecBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+const SECTION_LABELS = {
+  beneficios_categorias: 'Benefícios + Categorias', nivel: 'Escolha seu Nível',
+  produtos_destaque: 'Produtos em Destaque', mais_vendidos: 'Mais Vendidos',
+  ofertas_banner: 'Ofertas em Destaque (banners)', lancamentos: 'Lançamentos',
+  perifericos_alta: 'Periféricos em Alta', marcas: 'Marcas Parceiras',
+};
+let SECTIONS = [];
+let CATEGORIES = [];
+let editingKey = null;
+
+async function loadSections() {
+  const { data } = await window.sb.from('homepage_sections').select('*').order('ordem');
+  SECTIONS = data || [];
+  renderSections();
+}
+
+let sectionsSortable = null;
+
+function renderSections() {
+  const el = document.getElementById('sectionsList');
+  el.innerHTML = SECTIONS.map((s, i) => `
+    <div class="sec-row" data-key="${s.section_key}">
+      <div class="drag-handle" title="Arrastar pra reordenar">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+      </div>
+      <div class="ord-btns">
+        <button onclick="moveSec('${s.section_key}',-1)" ${i===0?'disabled':''}>▲</button>
+        <button onclick="moveSec('${s.section_key}',1)" ${i===SECTIONS.length-1?'disabled':''}>▼</button>
+      </div>
+      <div style="flex:1;">
+        <div class="sec-row-title">${SECTION_LABELS[s.section_key] || s.section_key}</div>
+        ${(s.titulo_override || s.subtitulo_override) ? `<div class="sec-row-sub">${s.titulo_override || ''} ${s.subtitulo_override || ''}</div>` : ''}
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="openEditSec('${s.section_key}')">Renomear</button>
+      <label class="toggle-switch" title="${s.visivel ? 'Visível' : 'Oculta'}">
+        <input type="checkbox" ${s.visivel ? 'checked' : ''} onchange="toggleVisivel('${s.section_key}', this.checked)">
+        <span class="track"></span><span class="knob"></span>
+      </label>
+    </div>`).join('');
+
+  if (sectionsSortable) sectionsSortable.destroy();
+  sectionsSortable = new Sortable(el, {
+    animation: 180, handle: '.drag-handle',
+    onEnd: async function (evt) {
+      if (evt.oldIndex === evt.newIndex) return;
+      const moved = SECTIONS.splice(evt.oldIndex, 1)[0];
+      SECTIONS.splice(evt.newIndex, 0, moved);
+      await Promise.all(SECTIONS.map((s, i) => window.sb.from('homepage_sections').update({ ordem: i }).eq('section_key', s.section_key)));
+      loadSections();
+    },
+  });
+}
+
+window.moveSec = async function (key, dir) {
+  const idx = SECTIONS.findIndex(s => s.section_key === key);
+  const swap = SECTIONS[idx + dir];
+  if (!swap) return;
+  await Promise.all([
+    window.sb.from('homepage_sections').update({ ordem: swap.ordem }).eq('section_key', SECTIONS[idx].section_key),
+    window.sb.from('homepage_sections').update({ ordem: SECTIONS[idx].ordem }).eq('section_key', swap.section_key),
+  ]);
+  loadSections();
+};
+
+window.toggleVisivel = async function (key, visivel) {
+  await window.sb.from('homepage_sections').update({ visivel }).eq('section_key', key);
+  loadSections();
+};
+
+window.openEditSec = function (key) {
+  const s = SECTIONS.find(x => x.section_key === key);
+  editingKey = key;
+  document.getElementById('f_titulo').value = s.titulo_override || '';
+  document.getElementById('f_subtitulo').value = s.subtitulo_override || '';
+  document.getElementById('editModal').classList.add('open');
+};
+function closeModal() { document.getElementById('editModal').classList.remove('open'); }
+
+document.getElementById('saveSecBtn').addEventListener('click', async () => {
+  await window.sb.from('homepage_sections').update({
+    titulo_override: document.getElementById('f_titulo').value.trim() || null,
+    subtitulo_override: document.getElementById('f_subtitulo').value.trim() || null,
+  }).eq('section_key', editingKey);
+  closeModal();
+  loadSections();
+});
+
+async function loadCategories() {
+  const { data } = await window.sb.from('categories').select('*').order('ordem_home').order('ordem');
+  CATEGORIES = data || [];
+  renderCategories();
+}
+
+let categoriesSortable = null;
+
+function renderCategories() {
+  const el = document.getElementById('categoriesList');
+  el.innerHTML = CATEGORIES.map((c, i) => `
+    <div class="cat-row" data-id="${c.id}">
+      <div class="drag-handle" title="Arrastar pra reordenar">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+      </div>
+      <img src="${c.imagem_url || 'img teste.jpg'}" alt="">
+      <div class="cat-row-name">${c.nome}</div>
+      <div class="ord-btns">
+        <button onclick="moveCat(${c.id},-1)" ${i===0?'disabled':''}>▲</button>
+        <button onclick="moveCat(${c.id},1)" ${i===CATEGORIES.length-1?'disabled':''}>▼</button>
+      </div>
+      <label class="toggle-switch" title="Exibir na home">
+        <input type="checkbox" ${c.mostrar_home ? 'checked' : ''} onchange="toggleCatHome(${c.id}, this.checked)">
+        <span class="track"></span><span class="knob"></span>
+      </label>
+    </div>`).join('');
+
+  if (categoriesSortable) categoriesSortable.destroy();
+  categoriesSortable = new Sortable(el, {
+    animation: 180, handle: '.drag-handle',
+    onEnd: async function (evt) {
+      if (evt.oldIndex === evt.newIndex) return;
+      const moved = CATEGORIES.splice(evt.oldIndex, 1)[0];
+      CATEGORIES.splice(evt.newIndex, 0, moved);
+      await Promise.all(CATEGORIES.map((c, i) => window.sb.from('categories').update({ ordem_home: i }).eq('id', c.id)));
+      loadCategories();
+    },
+  });
+}
+
+window.toggleCatHome = async function (id, mostrar_home) {
+  await window.sb.from('categories').update({ mostrar_home }).eq('id', id);
+  loadCategories();
+};
+
+window.moveCat = async function (id, dir) {
+  const idx = CATEGORIES.findIndex(c => c.id === id);
+  const swap = CATEGORIES[idx + dir];
+  if (!swap) return;
+  await Promise.all([
+    window.sb.from('categories').update({ ordem_home: swap.ordem_home }).eq('id', CATEGORIES[idx].id),
+    window.sb.from('categories').update({ ordem_home: CATEGORIES[idx].ordem_home }).eq('id', swap.id),
+  ]);
+  loadCategories();
+};
+
+(async function () {
+  const session = await AdminShell.init('aparencia-homepage');
+  if (!session) return;
+  await Promise.all([loadSections(), loadCategories()]);
+})();
+</script>
+</body>
+</html>

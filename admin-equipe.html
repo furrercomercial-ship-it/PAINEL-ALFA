@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Equipe — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.section-title{font-size:15px;font-weight:800;margin:34px 0 14px;}
+.section-title:first-child{margin-top:0;}
+.role-select{background:var(--bg-main);border:1px solid var(--border-color);color:var(--text-main);padding:6px 8px;font-size:12px;}
+.perm-matrix{width:100%;border-collapse:collapse;font-size:12.5px;}
+.perm-matrix th,.perm-matrix td{padding:9px 12px;border-bottom:1px solid var(--border-color);text-align:center;}
+.perm-matrix th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);}
+.perm-matrix td:first-child,.perm-matrix th:first-child{text-align:left;color:var(--text-secondary);}
+.perm-matrix input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+.perm-module-lbl{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--text-muted);background:rgba(128,128,128,.06);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Equipe</div></div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="section-title">Criar conta de equipe</div>
+      <div class="card">
+        <div class="admin-login-msg" id="createMsg"></div>
+        <div class="field-row">
+          <div class="field"><label>Nome completo *</label><input id="f_name"></div>
+          <div class="field"><label>E-mail *</label><input type="email" id="f_email"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Senha inicial *</label><input type="password" id="f_pass" placeholder="Mínimo 6 caracteres"></div>
+          <div class="field"><label>Cargo *</label>
+            <select id="f_role">
+              <option value="administrador">Administrador</option>
+              <option value="gerente">Gerente</option>
+              <option value="funcionario">Funcionário</option>
+              <option value="financeiro">Financeiro</option>
+              <option value="suporte">Suporte</option>
+              <option value="editor">Editor</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="createBtn">Criar Conta</button>
+      </div>
+
+      <div class="section-title">Contas de equipe</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Cargo</th><th>Status</th><th></th></tr></thead>
+          <tbody id="staffTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="section-title">Matriz de Permissões</div>
+      <div class="table-wrap" style="overflow-x:auto;">
+        <table class="perm-matrix" id="permMatrix"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+const ROLES = ['administrador','gerente','funcionario','financeiro','suporte','editor'];
+const ROLE_LABELS = { administrador:'Admin', gerente:'Gerente', funcionario:'Funcionário', financeiro:'Financeiro', suporte:'Suporte', editor:'Editor' };
+let STAFF = [];
+let PERMISSIONS = [];
+let ROLE_PERMS = [];
+
+function showCreateMsg(type, text) {
+  const el = document.getElementById('createMsg');
+  el.className = 'admin-login-msg ' + type;
+  el.textContent = text;
+}
+
+async function loadStaff() {
+  const { data, error } = await window.sb.from('profiles').select('id,full_name,email,role,is_blocked').neq('role', 'cliente').order('full_name');
+  if (error) { console.error(error); return; }
+  STAFF = data || [];
+  renderStaff();
+}
+
+function renderStaff() {
+  const tbody = document.getElementById('staffTbody');
+  if (!STAFF.length) { tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Nenhuma conta de equipe ainda.</td></tr>'; return; }
+  tbody.innerHTML = STAFF.map(s => `
+    <tr>
+      <td class="strong">${s.full_name || '—'}</td>
+      <td>${s.email || '—'}</td>
+      <td>
+        <select class="role-select" onchange="changeRole('${s.id}', this.value)">
+          ${ROLES.map(r => `<option value="${r}" ${r===s.role?'selected':''}>${ROLE_LABELS[r]}</option>`).join('')}
+        </select>
+      </td>
+      <td>${s.is_blocked ? '<span class="status-pill red">Bloqueado</span>' : '<span class="status-pill green">Ativo</span>'}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="toggleBlock('${s.id}', ${s.is_blocked})">${s.is_blocked ? 'Desbloquear' : 'Bloquear'}</button></td>
+    </tr>`).join('');
+}
+
+window.changeRole = async function (id, role) {
+  const { error } = await window.sb.from('profiles').update({ role }).eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); loadStaff(); return; }
+  loadStaff();
+};
+
+window.toggleBlock = async function (id, current) {
+  const { error } = await window.sb.from('profiles').update({ is_blocked: !current }).eq('id', id);
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  loadStaff();
+};
+
+document.getElementById('createBtn').addEventListener('click', async () => {
+  const full_name = document.getElementById('f_name').value.trim();
+  const email = document.getElementById('f_email').value.trim();
+  const password = document.getElementById('f_pass').value;
+  const role = document.getElementById('f_role').value;
+  if (!full_name || !email || !password || password.length < 6) {
+    showCreateMsg('error', 'Preencha nome, e-mail e uma senha com pelo menos 6 caracteres.');
+    return;
+  }
+  showCreateMsg('success', 'Criando conta...');
+  const { data, error } = await window.sb.functions.invoke('admin-create-staff', {
+    body: { full_name, email, password, role },
+  });
+  if (error) { showCreateMsg('error', 'Erro ao criar conta: ' + error.message); return; }
+  if (data && data.error) { showCreateMsg('error', data.error); return; }
+  showCreateMsg('success', 'Conta criada com sucesso!');
+  document.getElementById('f_name').value = '';
+  document.getElementById('f_email').value = '';
+  document.getElementById('f_pass').value = '';
+  loadStaff();
+});
+
+/* ── MATRIZ DE PERMISSÕES ── */
+async function loadPermMatrix() {
+  const [{ data: perms }, { data: rp }] = await Promise.all([
+    window.sb.from('permissions').select('*').order('module'),
+    window.sb.from('role_permissions').select('*'),
+  ]);
+  PERMISSIONS = perms || [];
+  ROLE_PERMS = rp || [];
+  renderPermMatrix();
+}
+
+function isAllowed(role, key) {
+  const row = ROLE_PERMS.find(r => r.role === role && r.permission_key === key);
+  return row ? row.allowed : false;
+}
+
+function renderPermMatrix() {
+  const table = document.getElementById('permMatrix');
+  let modules = [...new Set(PERMISSIONS.map(p => p.module))];
+  let html = '<thead><tr><th>Permissão</th>' + ROLES.map(r => `<th>${ROLE_LABELS[r]}</th>`).join('') + '</tr></thead><tbody>';
+  modules.forEach(mod => {
+    html += `<tr><td colspan="${ROLES.length + 1}" class="perm-module-lbl">${mod}</td></tr>`;
+    PERMISSIONS.filter(p => p.module === mod).forEach(p => {
+      html += `<tr><td>${p.label}</td>` + ROLES.map(r => {
+        const checked = isAllowed(r, p.key);
+        const lockedAdmin = r === 'administrador';
+        return `<td><input type="checkbox" ${checked ? 'checked' : ''} ${lockedAdmin ? 'disabled title="Administrador sempre tem acesso total"' : ''} onchange="togglePerm('${r}','${p.key}',this.checked)"></td>`;
+      }).join('') + '</tr>';
+    });
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+window.togglePerm = async function (role, key, allowed) {
+  const { error } = await window.sb.from('role_permissions').upsert({ role, permission_key: key, allowed }, { onConflict: 'role,permission_key' });
+  if (error) { AdminShell.toast('Erro ao salvar permissão: ' + error.message, 'error'); loadPermMatrix(); return; }
+  const row = ROLE_PERMS.find(r => r.role === role && r.permission_key === key);
+  if (row) row.allowed = allowed; else ROLE_PERMS.push({ role, permission_key: key, allowed });
+};
+
+(async function () {
+  const session = await AdminShell.init('equipe');
+  if (!session) return;
+  await Promise.all([loadStaff(), loadPermMatrix()]);
+})();
+</script>
+</body>
+</html>

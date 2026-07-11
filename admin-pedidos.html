@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pedidos — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.order-item-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-color);font-size:12.5px;}
+.order-item-row:last-child{border-bottom:none;}
+.detail-section{margin-bottom:18px;}
+.detail-section-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px;}
+.detail-line{font-size:13px;color:var(--text-secondary);margin-bottom:3px;}
+.totals-box{margin-top:8px;padding-top:10px;border-top:1px solid var(--border-color);}
+.totals-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}
+.totals-row.grand{font-weight:800;font-size:15px;color:var(--text-main);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar"><div class="admin-topbar-title">Pedidos</div></div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="search" id="searchInp" class="search-box" placeholder="Buscar por nº do pedido...">
+          <select id="statusFilter" style="padding:9px 12px;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-main);">
+            <option value="">Todos os status</option>
+            <option value="aguardando_pagamento">Aguardando Pagamento</option>
+            <option value="pago">Pago</option>
+            <option value="preparando">Em Preparação</option>
+            <option value="enviado">Em Transporte</option>
+            <option value="entregue">Entregue</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+        </div>
+        <div id="ordCount" style="font-size:12.5px;color:var(--text-muted);"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Total</th><th>Status</th><th></th></tr></thead>
+          <tbody id="ordTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ordModal">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="ordModalTitle">Pedido</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div id="ordDetail"></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+const STATUS_LABELS = { aguardando_pagamento:'Aguardando Pagamento', pago:'Pago', preparando:'Em Preparação', enviado:'Em Transporte', entregue:'Entregue', cancelado:'Cancelado' };
+const STATUS_COLORS = { aguardando_pagamento:'amber', pago:'blue', preparando:'blue', enviado:'blue', entregue:'green', cancelado:'red' };
+let ORDERS = [];
+let canEdit = false;
+
+function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+function fmtDate(iso) { return new Date(iso).toLocaleDateString('pt-BR') + ' ' + new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+
+async function loadOrders() {
+  const { data, error } = await window.sb
+    .from('orders')
+    .select('id,order_number,status,total,created_at,profiles(full_name)')
+    .order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+  ORDERS = data || [];
+  renderTable();
+}
+
+function renderTable() {
+  const q = document.getElementById('searchInp').value.trim().toLowerCase();
+  const statusF = document.getElementById('statusFilter').value;
+  let list = ORDERS.filter(o => {
+    if (q && !(o.order_number || '').toLowerCase().includes(q)) return false;
+    if (statusF && o.status !== statusF) return false;
+    return true;
+  });
+  document.getElementById('ordCount').textContent = list.length + ' pedido' + (list.length !== 1 ? 's' : '');
+  const tbody = document.getElementById('ordTbody');
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Nenhum pedido encontrado.</td></tr>'; return; }
+  tbody.innerHTML = list.map(o => `
+    <tr>
+      <td class="strong">#${o.order_number || o.id}</td>
+      <td>${o.profiles ? o.profiles.full_name : 'Visitante'}</td>
+      <td>${fmtDate(o.created_at)}</td>
+      <td class="strong">${fmtBRL(o.total)}</td>
+      <td><span class="status-pill ${STATUS_COLORS[o.status] || 'gray'}">${STATUS_LABELS[o.status] || o.status}</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openDetail(${o.id})">Ver detalhes</button></td>
+    </tr>`).join('');
+}
+
+window.openDetail = async function (id) {
+  const { data: order, error } = await window.sb.from('orders').select('*, profiles(full_name,cpf,phone)').eq('id', id).single();
+  if (error || !order) return;
+  const { data: items } = await window.sb.from('order_items').select('*').eq('order_id', id);
+  const addr = order.address_snapshot || {};
+
+  document.getElementById('ordModalTitle').textContent = 'Pedido #' + (order.order_number || order.id);
+  document.getElementById('ordDetail').innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Status</div>
+      <select id="statusSelect" ${canEdit ? '' : 'disabled'} style="width:100%;background:var(--bg-main);border:1px solid var(--border-color);color:var(--text-main);padding:10px 12px;">
+        ${Object.entries(STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${k===order.status?'selected':''}>${v}</option>`).join('')}
+      </select>
+      ${canEdit ? '<button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="saveStatus(' + id + ')">Salvar Status</button>' : ''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Cliente</div>
+      <div class="detail-line">${order.profiles ? order.profiles.full_name : 'Visitante (sem conta)'}</div>
+      ${order.profiles && order.profiles.phone ? `<div class="detail-line">${order.profiles.phone}</div>` : ''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Endereço de entrega</div>
+      ${addr.rua ? `<div class="detail-line">${addr.rua}${addr.numero ? ', ' + addr.numero : ''} ${addr.compl || ''}</div>
+        <div class="detail-line">${addr.bairro || ''} ${addr.cid || ''}/${addr.uf || ''} · CEP ${addr.cep || ''}</div>
+        <div class="detail-line">Destinatário: ${addr.dest || '—'} · ${addr.tel || ''}</div>`
+        : '<div class="detail-line">Sem endereço registrado.</div>'}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Envio e Pagamento</div>
+      <div class="detail-line">Envio: ${order.shipping_method || '—'}</div>
+      <div class="detail-line">Pagamento: ${order.payment_method || '—'}</div>
+      ${order.tracking_code ? `<div class="detail-line">Rastreio: ${order.tracking_code}</div>` : ''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Itens</div>
+      ${(items || []).map(i => `<div class="order-item-row"><span>${i.qty}x ${i.product_name_snapshot}</span><span>${fmtBRL(i.line_total)}</span></div>`).join('') || '<div class="detail-line">Nenhum item.</div>'}
+      <div class="totals-box">
+        <div class="totals-row"><span>Subtotal</span><span>${fmtBRL(order.subtotal)}</span></div>
+        ${order.discount ? `<div class="totals-row"><span>Desconto</span><span>− ${fmtBRL(order.discount)}</span></div>` : ''}
+        <div class="totals-row"><span>Frete</span><span>${order.freight ? fmtBRL(order.freight) : 'Grátis'}</span></div>
+        <div class="totals-row grand"><span>Total</span><span>${fmtBRL(order.total)}</span></div>
+      </div>
+    </div>`;
+
+  document.getElementById('ordModal').classList.add('open');
+};
+
+window.saveStatus = async function (id) {
+  const status = document.getElementById('statusSelect').value;
+  const { error } = await window.sb.from('orders').update({ status }).eq('id', id);
+  if (error) { AdminShell.toast('Erro ao salvar: ' + error.message, 'error'); return; }
+  AdminShell.toast('Status atualizado!', 'success');
+  closeModal();
+  loadOrders();
+};
+
+function closeModal() { document.getElementById('ordModal').classList.remove('open'); }
+
+document.getElementById('searchInp').addEventListener('input', renderTable);
+document.getElementById('statusFilter').addEventListener('change', renderTable);
+
+(async function () {
+  const session = await AdminShell.init('pedidos');
+  if (!session) return;
+  canEdit = AdminShell.can('pedidos.editar');
+  await loadOrders();
+})();
+</script>
+</body>
+</html>
