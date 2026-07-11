@@ -127,6 +127,7 @@
 <script src="admin-upload.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
 <script>
+const SITE_URL = 'https://alfa-informatica-dhs9.vercel.app';
 const CORE_PAGES = [
   { nome: 'Homepage', desc: 'Hero, banners e seções', href: 'admin-aparencia-hero.html' },
   { nome: 'Produto', desc: 'Blocos: galeria, descrição, avaliações', href: 'admin-aparencia-blocos.html' },
@@ -252,8 +253,8 @@ document.getElementById('btnVoltar').addEventListener('click', () => {
 document.getElementById('btnNovaPagina').addEventListener('click', () => openEditor(null));
 
 function currentSlugPreviewUrl(slug, tipo) {
-  const tpl = TIPO_TEMPLATE[tipo] || 'pagina.html';
-  const sep = tpl.indexOf('?') === -1 ? '?' : '&';
+  const tpl = SITE_URL + '/' + (TIPO_TEMPLATE[tipo] || 'pagina.html');
+  const sep = '?';
   if (tipo === 'institucional') return tpl + sep + 'slug=' + encodeURIComponent(slug) + '&alfa_admin_test=1';
   return tpl + sep + 'alfa_admin_test=1';
 }

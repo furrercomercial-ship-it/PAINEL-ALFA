@@ -80,7 +80,7 @@
             </div>
           </div>
           <div class="preview-frame-wrap">
-            <iframe id="previewFrame" class="device-desktop" src="alfa-replica.html?alfa_admin_test=1"></iframe>
+            <iframe id="previewFrame" class="device-desktop" src=""></iframe>
           </div>
         </div>
       </div>
@@ -103,6 +103,7 @@
 <script src="supabase-client.js"></script>
 <script src="admin-shell.js"></script>
 <script>
+const SITE_URL = 'https://alfa-informatica-dhs9.vercel.app';
 const COLOR_GROUPS = [
   { title: 'Superfícies', fields: [
     ['background','Fundo da página'], ['card','Cards'], ['header','Cabeçalho'], ['footer','Rodapé'], ['sidebar','Sidebar'],
@@ -245,15 +246,15 @@ function renderFields() {
 
 function applyPreview() {
   const frame = document.getElementById('previewFrame');
-  const win = frame.contentWindow;
-  if (!win || !win.AlfaThemeLoader) return;
-  // Reaproveita o mesmo motor do site (theme-loader.js), já carregado dentro
-  // do iframe — só precisamos alimentar ele com o estado atual do rascunho.
-  try {
-    win.document.documentElement.dataset.theme = mode;
-    win.__alfaPreviewOverride = { theme_colors: COLORS, typography: TYPO, button_style: BTNSTYLE };
-    win.AlfaThemeLoader.reapply();
-  } catch (e) { /* iframe pode não ter terminado de carregar ainda */ }
+  if (!frame.contentWindow) return;
+  // Painel e site são domínios/deploys separados, então não dá pra escrever
+  // direto no window do iframe (bloqueado por same-origin policy) — manda
+  // por postMessage e o theme-loader.js do site escuta e reaplica.
+  frame.contentWindow.postMessage({
+    type: 'alfa-preview-override',
+    mode: mode,
+    payload: { theme_colors: COLORS, typography: TYPO, button_style: BTNSTYLE },
+  }, SITE_URL);
 }
 
 document.querySelectorAll('.mode-tabs button').forEach(btn => {
@@ -275,6 +276,7 @@ document.querySelectorAll('.device-tabs button').forEach(btn => {
   });
 });
 document.getElementById('previewFrame').addEventListener('load', applyPreview);
+document.getElementById('previewFrame').src = SITE_URL + '/alfa-replica.html?alfa_admin_test=1';
 
 function updateDraftPill() {
   document.getElementById('draftPill').innerHTML = hasDraft ? '<span class="draft-pill">Rascunho não publicado</span>' : '';

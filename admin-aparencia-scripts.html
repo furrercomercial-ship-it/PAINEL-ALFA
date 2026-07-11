@@ -303,6 +303,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.8.8/parser-postcss.js"></script>
 
 <script>
+const SITE_URL = 'https://alfa-informatica-dhs9.vercel.app';
 /* ════════════════════════════════════════════════════════════════════
    DADOS ESTÁTICOS
    ════════════════════════════════════════════════════════════════════ */
@@ -826,46 +827,30 @@ window.excluirScript = async function (id) {
    ════════════════════════════════════════════════════════════════════ */
 function runDiagnostics() {
   return new Promise(resolve => {
-    if (location.protocol === 'file:') {
-      resolve({ detectado: {}, totalInjetados: 0, duplicados: [], recursos: [], bloqueadoPorFile: true });
-      return;
-    }
+    // Painel e site são domínios separados — não dá pra ler window.gtag/
+    // window.AlfaScripts direto do iframe (same-origin policy). Pede o
+    // diagnóstico por postMessage e o script-engine.js do site responde.
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:-9999px;';
-    iframe.src = 'alfa-replica.html?alfa_admin_test=1';
+    iframe.src = SITE_URL + '/alfa-replica.html?alfa_admin_test=1';
+    const requestId = 'diag-' + Date.now();
     let done = false;
-    function finish() {
+    function finish(result) {
       if (done) return; done = true;
-      const result = { detectado: {}, totalInjetados: 0, duplicados: [], recursos: [], bloqueadoPorFile: false };
-      try {
-        const w = iframe.contentWindow;
-        result.detectado = {
-          ga4_gtm: typeof w.gtag === 'function' || typeof w.dataLayer !== 'undefined',
-          meta_pixel: typeof w.fbq === 'function',
-          tiktok_pixel: typeof w.ttq !== 'undefined',
-          clarity: typeof w.clarity === 'function',
-          hotjar: typeof w.hj === 'function',
-        };
-        if (w.AlfaScripts && w.AlfaScripts.diagnostics) {
-          const diag = w.AlfaScripts.diagnostics();
-          result.totalInjetados = diag.totalInjetados; result.duplicados = diag.duplicados; result.recursos = diag.recursos;
-        }
-      } catch (e) { console.error(e); result.bloqueadoPorFile = true; }
+      window.removeEventListener('message', onMessage);
       document.body.removeChild(iframe);
       resolve(result);
     }
+    function onMessage(e) {
+      if (!e.data || e.data.type !== 'alfa-diag-response' || e.data.requestId !== requestId) return;
+      finish(Object.assign({ bloqueadoPorFile: false }, e.data.result));
+    }
+    window.addEventListener('message', onMessage);
     iframe.onload = function () {
-      // Espera o script-engine.js do iframe terminar de verdade (marca
-      // window.__alfaReady) em vez de confiar num tempo fixo — evita falso
-      // "não detectado" quando a rede está mais lenta.
-      const start = Date.now();
-      const poll = setInterval(() => {
-        let ready = false;
-        try { ready = !!(iframe.contentWindow && iframe.contentWindow.__alfaReady); } catch (e) {}
-        if (ready || Date.now() - start > 6000) { clearInterval(poll); setTimeout(finish, 150); }
-      }, 200);
+      iframe.contentWindow.postMessage({ type: 'alfa-diag-request', requestId }, SITE_URL);
     };
     document.body.appendChild(iframe);
+    setTimeout(() => finish({ detectado: {}, totalInjetados: 0, duplicados: [], recursos: [], bloqueadoPorFile: true }), 8000);
   });
 }
 
@@ -875,7 +860,7 @@ window.testarIntegracao = async function (id) {
   const row = INTEGRACOES.find(i => i.id === id);
   const result = await runDiagnostics();
   if (result.bloqueadoPorFile) {
-    AdminShell.toast('Não dá pra testar com o site aberto direto do arquivo (file://) — isso só funciona com o site publicado num endereço http(s)://. A configuração em si já foi salva normalmente.', 'error');
+    AdminShell.toast('Não consegui falar com o site (' + SITE_URL + ') pra testar. Confira se ele está no ar. A configuração em si já foi salva normalmente.', 'error');
     return;
   }
   const keyMap = { ga4: 'ga4_gtm', gtm: 'ga4_gtm', google_ads: 'ga4_gtm', meta_pixel: 'meta_pixel', tiktok_pixel: 'tiktok_pixel', clarity: 'clarity', hotjar: 'hotjar' };
@@ -897,7 +882,7 @@ async function runDiagAndRender() {
   document.getElementById('diagResult').innerHTML = '<p class="scr-desc">Rodando diagnóstico...</p>';
   const r = await runDiagnostics();
   if (r.bloqueadoPorFile) {
-    document.getElementById('diagResult').innerHTML = '<div class="warn-banner">Este diagnóstico precisa que o site esteja publicado num endereço http(s):// — não funciona com o site aberto direto do arquivo (file://), porque o navegador bloqueia por segurança. Assim que o site estiver no ar (ex: Vercel), volte aqui pra rodar o diagnóstico de verdade.</div>';
+    document.getElementById('diagResult').innerHTML = '<div class="warn-banner">Não consegui falar com o site (' + SITE_URL + ') pra rodar o diagnóstico. Confira se ele está no ar e tente de novo.</div>';
     return;
   }
   localStorage.setItem('alfa_last_diag', JSON.stringify({ ts: Date.now() }));
