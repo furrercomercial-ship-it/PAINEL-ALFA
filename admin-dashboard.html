@@ -18,7 +18,7 @@
 /* O painel de notificações é pensado pra "subir" a partir de um sino
    flutuante lá embaixo (admin.css) — aqui o sino é lá em cima, então o
    painel precisa "descer" a partir dele em vez de flutuar no rodapé. */
-.notif-panel{top:64px;bottom:auto;right:40px;width:320px;max-height:min(680px, calc(100vh - 100px));}
+.notif-panel{top:64px;bottom:auto;right:20px !important;width:320px;max-height:calc(100vh - 90px);}
 @media(max-width:480px){.notif-panel{right:12px;}}
 
 /* ── util ── */
@@ -776,19 +776,10 @@ document.getElementById('periodTabs').addEventListener('click', (e) => {
   if (!btn || !dateRangeCtl) return;
   dateRangeCtl.setKey(btn.dataset.key);
 });
-function positionNotifPanel() {
-  const bell = document.getElementById('dashBellBtn');
-  const panel = document.getElementById('notifPanel');
-  if (!bell || !panel) return;
-  const rect = bell.getBoundingClientRect();
-  panel.style.right = Math.max(12, window.innerWidth - rect.right) + 'px';
-}
 document.getElementById('dashBellBtn').addEventListener('click', () => {
-  positionNotifPanel();
   if (window.AdminShell && AdminShell.toggleNotifications) AdminShell.toggleNotifications();
   else location.href = 'admin-notificacoes.html';
 });
-window.addEventListener('resize', positionNotifPanel);
 
 (async function () {
   const session = await AdminShell.init('dashboard');
