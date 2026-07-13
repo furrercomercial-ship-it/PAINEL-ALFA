@@ -15,6 +15,11 @@
 /* O sino já mora no topbar desta página (perto do banner de pedidos
    pendentes) — não precisa do sino flutuante duplicado por cima. */
 .notif-fab{display:none !important;}
+/* O painel de notificações é pensado pra "subir" a partir de um sino
+   flutuante lá embaixo (admin.css) — aqui o sino é lá em cima, então o
+   painel precisa "descer" a partir dele em vez de flutuar no rodapé. */
+.notif-panel{top:64px;bottom:auto;right:40px;max-height:min(600px, calc(100vh - 100px));}
+@media(max-width:480px){.notif-panel{right:12px;}}
 
 /* ── util ── */
 .dash-content{padding:40px 40px 100px;max-width:1600px;margin:0 auto;}
@@ -771,10 +776,19 @@ document.getElementById('periodTabs').addEventListener('click', (e) => {
   if (!btn || !dateRangeCtl) return;
   dateRangeCtl.setKey(btn.dataset.key);
 });
+function positionNotifPanel() {
+  const bell = document.getElementById('dashBellBtn');
+  const panel = document.getElementById('notifPanel');
+  if (!bell || !panel) return;
+  const rect = bell.getBoundingClientRect();
+  panel.style.right = Math.max(12, window.innerWidth - rect.right) + 'px';
+}
 document.getElementById('dashBellBtn').addEventListener('click', () => {
+  positionNotifPanel();
   if (window.AdminShell && AdminShell.toggleNotifications) AdminShell.toggleNotifications();
   else location.href = 'admin-notificacoes.html';
 });
+window.addEventListener('resize', positionNotifPanel);
 
 (async function () {
   const session = await AdminShell.init('dashboard');
