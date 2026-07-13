@@ -142,6 +142,7 @@
 <script src="supabase-client.js"></script>
 <script src="admin-shell.js"></script>
 <script>
+const NO_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#CFCFCF"/></svg>');
 let CATS = [];
 let PRODUCTS = [];
 let editingId = null;
@@ -202,7 +203,7 @@ function renderTable() {
   if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhum produto encontrado.</td></tr>'; return; }
 
   tbody.innerHTML = list.map(p => {
-    const img = p.images && p.images[0] ? p.images[0] : 'img teste.jpg';
+    const img = p.images && p.images[0] ? p.images[0] : NO_IMG;
     const stockBadge = p.stock <= 0 ? '<span class="status-pill red">Sem estoque</span>'
       : p.stock <= p.min_stock ? '<span class="status-pill amber">' + p.stock + ' (baixo)</span>'
       : '<span class="status-pill gray">' + p.stock + '</span>';
@@ -418,6 +419,8 @@ document.getElementById('statusFilter').addEventListener('change', renderTable);
   }
   await loadCategories();
   await loadProducts();
+  const qParam = new URLSearchParams(location.search).get('q');
+  if (qParam) { document.getElementById('searchInp').value = qParam; renderTable(); }
 })();
 </script>
 </body>

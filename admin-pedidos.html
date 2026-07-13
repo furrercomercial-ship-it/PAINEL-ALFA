@@ -176,6 +176,8 @@ document.getElementById('statusFilter').addEventListener('change', renderTable);
   if (!session) return;
   canEdit = AdminShell.can('pedidos.editar');
   await loadOrders();
+  const qParam = new URLSearchParams(location.search).get('q');
+  if (qParam) { document.getElementById('searchInp').value = qParam; renderTable(); }
 })();
 </script>
 </body>

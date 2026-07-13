@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Itens em Estoque — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.est-img{width:40px;height:40px;border-radius:var(--radius-sm);background:var(--bg-main);border:1px solid var(--border-color);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.est-img img{width:100%;height:100%;object-fit:contain;}
+.est-name-row{display:flex;align-items:center;gap:10px;}
+.est-sku{font-size:11px;color:var(--text-muted);}
+.est-loc-input{background:transparent;border:1px solid transparent;border-radius:var(--radius-sm);padding:5px 7px;color:var(--text-secondary);font-size:12px;width:110px;transition:border-color .15s,background .15s;}
+.est-loc-input:hover{border-color:var(--border-color);}
+.est-loc-input:focus{border-color:var(--primary);background:var(--bg-main);outline:none;}
+.est-qty{font-weight:700;}
+.est-qty.low{color:var(--warning);}
+.est-qty.zero{color:var(--danger);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Itens em Estoque</div>
+      <div class="admin-topbar-actions">
+        <a class="btn btn-secondary" href="admin-estoque-dashboard.html">Ver visão geral</a>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="search" class="search-box" id="fSearch" placeholder="Buscar por nome ou SKU...">
+          <select id="fCategoria" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-main);font-size:13px;"><option value="">Todas as categorias</option></select>
+          <select id="fFornecedor" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-main);font-size:13px;"><option value="">Todos os fornecedores</option></select>
+          <select id="fStatus" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-main);font-size:13px;">
+            <option value="">Todos os status</option>
+            <option value="normal">Normal</option>
+            <option value="baixo">Estoque baixo</option>
+            <option value="zerado">Sem estoque</option>
+          </select>
+        </div>
+        <div id="totalCount" style="font-size:12.5px;color:var(--text-muted);"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Produto</th><th>Categoria</th><th>Fornecedor</th><th>Localização</th>
+            <th>Estoque</th><th>Mínimo</th><th>Preço</th><th>Status</th><th>Última mov.</th><th></th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="10" class="table-empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="movModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-head"><div class="modal-title">Movimentar estoque</div><button class="modal-close" onclick="closeMov()">✕</button></div>
+    <div id="movProdName" style="font-size:13px;font-weight:700;margin-bottom:16px;"></div>
+    <div class="field">
+      <label>Tipo de movimentação</label>
+      <select id="movTipo">
+        <option value="entrada_manual">Entrada manual</option>
+        <option value="saida_manual">Saída manual</option>
+        <option value="reposicao">Reposição</option>
+        <option value="ajuste">Ajuste (informe +/- diretamente)</option>
+      </select>
+    </div>
+    <div class="field"><label id="movQtyLbl">Quantidade</label><input type="number" id="movQty" placeholder="0"></div>
+    <div class="field"><label>Lote (opcional)</label><input type="text" id="movLote"></div>
+    <div class="field"><label>Motivo / observação</label><textarea id="movMotivo" placeholder="Ex: recebimento do fornecedor X, correção de contagem..."></textarea></div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeMov()">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvarMov">Registrar movimentação</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="histModal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-head"><div class="modal-title">Histórico de movimentação</div><button class="modal-close" onclick="document.getElementById('histModal').classList.remove('open')">✕</button></div>
+    <div id="histProdName" style="font-size:13px;font-weight:700;margin-bottom:14px;"></div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Quando</th><th>Tipo</th><th>Qtd</th><th>Saldo após</th><th>Motivo</th><th>Usuário</th></tr></thead>
+      <tbody id="histTbody"></tbody>
+    </table></div>
+    <div class="modal-foot"><button class="btn btn-secondary" onclick="document.getElementById('histModal').classList.remove('open')">Fechar</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+const MOV_LABELS = { entrada_manual:'Entrada manual', saida_manual:'Saída manual', venda:'Venda', cancelamento:'Cancelamento', reposicao:'Reposição', ajuste:'Ajuste' };
+let PRODUCTS = [], CATS = {}, LAST_MOV = {};
+let canEdit = false;
+let movProductId = null;
+
+function fmtBRL(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+function fmtWhen(iso) { return new Date(iso).toLocaleDateString('pt-BR') + ' ' + new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+
+async function loadAll() {
+  const [prodRes, catRes, movRes] = await Promise.all([
+    window.sb.from('products').select('id,name,sku,supplier,stock,min_stock,price,images,category_id,active,localizacao').order('name'),
+    window.sb.from('categories').select('id,nome'),
+    window.sb.from('estoque_movimentacoes').select('product_id,tipo,created_at').order('created_at', { ascending: false }).limit(500),
+  ]);
+  PRODUCTS = prodRes.data || [];
+  (catRes.data || []).forEach(c => CATS[c.id] = c.nome);
+  LAST_MOV = {};
+  (movRes.data || []).forEach(m => { if (!LAST_MOV[m.product_id]) LAST_MOV[m.product_id] = m; });
+
+  const catSel = document.getElementById('fCategoria');
+  catSel.innerHTML = '<option value="">Todas as categorias</option>' + Object.entries(CATS).map(([id, nome]) => `<option value="${id}">${nome}</option>`).join('');
+  const fornecedores = [...new Set(PRODUCTS.map(p => p.supplier).filter(Boolean))].sort();
+  document.getElementById('fFornecedor').innerHTML = '<option value="">Todos os fornecedores</option>' + fornecedores.map(f => `<option value="${f}">${f}</option>`).join('');
+
+  render();
+}
+
+function statusOf(p) {
+  if (p.stock <= 0) return 'zerado';
+  if (p.stock <= p.min_stock) return 'baixo';
+  return 'normal';
+}
+
+function render() {
+  const q = document.getElementById('fSearch').value.trim().toLowerCase();
+  const cat = document.getElementById('fCategoria').value;
+  const forn = document.getElementById('fFornecedor').value;
+  const status = document.getElementById('fStatus').value;
+
+  const list = PRODUCTS.filter(p => {
+    if (q && !((p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))) return false;
+    if (cat && String(p.category_id) !== cat) return false;
+    if (forn && p.supplier !== forn) return false;
+    if (status && statusOf(p) !== status) return false;
+    return true;
+  });
+
+  document.getElementById('totalCount').textContent = list.length + ' produto' + (list.length !== 1 ? 's' : '');
+
+  const tbody = document.getElementById('tbody');
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Nenhum produto encontrado.</td></tr>'; return; }
+
+  const statusPill = { normal: '<span class="status-pill green">Normal</span>', baixo: '<span class="status-pill amber">Estoque baixo</span>', zerado: '<span class="status-pill red">Sem estoque</span>' };
+
+  tbody.innerHTML = list.map(p => {
+    const img = p.images && p.images[0] ? `<img src="${p.images[0]}" alt="">` : '';
+    const lastMov = LAST_MOV[p.id];
+    const st = statusOf(p);
+    return `<tr>
+      <td><div class="est-name-row"><div class="est-img">${img}</div><div><div class="strong">${p.name}</div><div class="est-sku">${p.sku || '—'}</div></div></div></td>
+      <td>${CATS[p.category_id] || '—'}</td>
+      <td>${p.supplier || '—'}</td>
+      <td><input type="text" class="est-loc-input" value="${p.localizacao || ''}" placeholder="—" data-id="${p.id}" onchange="saveLocalizacao(this)" ${canEdit ? '' : 'disabled'}></td>
+      <td><span class="est-qty ${st === 'zerado' ? 'zero' : st === 'baixo' ? 'low' : ''}">${p.stock}</span></td>
+      <td>${p.min_stock}</td>
+      <td>${fmtBRL(p.price)}</td>
+      <td>${statusPill[st]}</td>
+      <td style="font-size:11.5px;color:var(--text-muted);">${lastMov ? (MOV_LABELS[lastMov.tipo] + ' · ' + fmtWhen(lastMov.created_at)) : '—'}</td>
+      <td>
+        <div class="table-actions">
+          ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="openMov(${p.id})">Movimentar</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="openHist(${p.id})">Histórico</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.saveLocalizacao = async function (input) {
+  const id = Number(input.dataset.id);
+  await window.sb.from('products').update({ localizacao: input.value.trim() || null }).eq('id', id);
+  const p = PRODUCTS.find(x => x.id === id);
+  if (p) p.localizacao = input.value.trim();
+  AdminShell.toast('Localização salva.', 'success');
+};
+
+window.openMov = function (id) {
+  movProductId = id;
+  const p = PRODUCTS.find(x => x.id === id);
+  document.getElementById('movProdName').textContent = p.name + ' — estoque atual: ' + p.stock;
+  document.getElementById('movTipo').value = 'entrada_manual';
+  document.getElementById('movQty').value = '';
+  document.getElementById('movLote').value = '';
+  document.getElementById('movMotivo').value = '';
+  updateMovQtyLabel();
+  document.getElementById('movModal').classList.add('open');
+};
+function closeMov() { document.getElementById('movModal').classList.remove('open'); }
+
+function updateMovQtyLabel() {
+  const tipo = document.getElementById('movTipo').value;
+  document.getElementById('movQtyLbl').textContent = tipo === 'ajuste' ? 'Quantidade (use negativo pra tirar, ex: -3)' : 'Quantidade';
+}
+document.getElementById('movTipo').addEventListener('change', updateMovQtyLabel);
+
+document.getElementById('btnSalvarMov').addEventListener('click', async () => {
+  const tipo = document.getElementById('movTipo').value;
+  let qty = Number(document.getElementById('movQty').value);
+  if (!qty) { AdminShell.toast('Informe uma quantidade diferente de zero.', 'error'); return; }
+  if (tipo === 'saida_manual') qty = -Math.abs(qty);
+  else if (tipo === 'entrada_manual' || tipo === 'reposicao') qty = Math.abs(qty);
+  // 'ajuste' usa o sinal digitado pelo usuário direto
+
+  const { error } = await window.sb.from('estoque_movimentacoes').insert({
+    product_id: movProductId, tipo, quantidade: qty,
+    motivo: document.getElementById('movMotivo').value.trim() || null,
+    lote: document.getElementById('movLote').value.trim() || null,
+  });
+  if (error) { AdminShell.toast('Erro: ' + error.message, 'error'); return; }
+  AdminShell.toast('Movimentação registrada!', 'success');
+  closeMov();
+  await loadAll();
+});
+
+window.openHist = async function (id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  document.getElementById('histProdName').textContent = p.name;
+  document.getElementById('histTbody').innerHTML = '<tr><td colspan="6" class="table-empty">Carregando...</td></tr>';
+  document.getElementById('histModal').classList.add('open');
+
+  const { data } = await window.sb.from('estoque_movimentacoes').select('*,profiles(full_name)').eq('product_id', id).order('created_at', { ascending: false }).limit(100);
+  const rows = data || [];
+  document.getElementById('histTbody').innerHTML = rows.length ? rows.map(m => `
+    <tr>
+      <td>${fmtWhen(m.created_at)}</td>
+      <td><span class="status-pill ${m.quantidade >= 0 ? 'green' : 'red'}">${MOV_LABELS[m.tipo] || m.tipo}</span></td>
+      <td>${m.quantidade > 0 ? '+' : ''}${m.quantidade}</td>
+      <td>${m.saldo_apos}</td>
+      <td>${m.motivo || '—'}${m.lote ? ' · lote ' + m.lote : ''}</td>
+      <td>${(m.profiles && m.profiles.full_name) || '—'}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="table-empty">Nenhuma movimentação registrada ainda.</td></tr>';
+};
+
+['fSearch', 'fCategoria', 'fFornecedor', 'fStatus'].forEach(id => {
+  document.getElementById(id).addEventListener('input', render);
+  document.getElementById(id).addEventListener('change', render);
+});
+
+(async function () {
+  const session = await AdminShell.init('estoque-itens');
+  if (!session) return;
+  canEdit = AdminShell.can('estoque.editar');
+  await loadAll();
+})();
+</script>
+</body>
+</html>

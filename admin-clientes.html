@@ -141,6 +141,8 @@ document.getElementById('searchInp').addEventListener('input', renderTable);
   if (!session) return;
   canEdit = AdminShell.can('clientes.editar');
   await loadClients();
+  const qParam = new URLSearchParams(location.search).get('q');
+  if (qParam) { document.getElementById('searchInp').value = qParam; renderTable(); }
 })();
 </script>
 </body>

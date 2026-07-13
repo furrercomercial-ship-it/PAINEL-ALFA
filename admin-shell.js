@@ -31,6 +31,8 @@ window.AdminShell = (function () {
     cupons: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.17L4 3a1 1 0 0 0-1 1l.17 5.59a2 2 0 0 0 .66 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
     lucro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
     despesas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h20"/><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 16h4"/></svg>',
+    estoque: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 8v8a2 2 0 0 1-1 1.73l-6 3.46a2 2 0 0 1-2 0l-6-3.46A2 2 0 0 1 5 16.73V8"/><path d="m3.27 6.96 8.73 5.05 8.73-5.05"/><path d="M12 22V12"/><path d="M8 4.5 16 9"/></svg>',
+    notificacoes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
   };
 
   const NAV = [
@@ -38,6 +40,9 @@ window.AdminShell = (function () {
 
     { key: 'produtos',   label: 'Produtos',   href: 'admin-produtos.html',   perm: 'produtos.editar', group: 'Catálogo', icon: ICONS.produtos },
     { key: 'categorias', label: 'Categorias', href: 'admin-categorias.html', perm: 'categorias.editar', group: 'Catálogo', icon: ICONS.categorias },
+
+    { key: 'estoque-dashboard', label: 'Visão Geral',      href: 'admin-estoque-dashboard.html', perm: 'estoque.visualizar', group: 'Estoque', icon: ICONS.estoque },
+    { key: 'estoque-itens',     label: 'Itens em Estoque', href: 'admin-estoque.html',           perm: 'estoque.visualizar', group: 'Estoque', icon: ICONS.estoque },
 
     { key: 'pedidos',    label: 'Pedidos',    href: 'admin-pedidos.html',    perm: 'pedidos.visualizar', group: 'Vendas', icon: ICONS.pedidos },
     { key: 'clientes',   label: 'Clientes',   href: 'admin-clientes.html',   perm: 'clientes.visualizar', group: 'Vendas', icon: ICONS.clientes },
@@ -61,8 +66,25 @@ window.AdminShell = (function () {
     { key: 'aparencia-seo',        label: 'SEO',                 href: 'admin-aparencia-seo.html',        perm: 'configuracoes.editar', group: 'Aparência', icon: ICONS.seo },
     { key: 'aparencia-scripts',    label: 'Integrações e Scripts', href: 'admin-aparencia-scripts.html',  perm: 'integracoes.visualizar', group: 'Aparência', icon: ICONS.scripts },
 
-    { key: 'equipe',     label: 'Equipe',     href: 'admin-equipe.html',     perm: 'equipe.gerenciar', group: 'Sistema', icon: ICONS.equipe },
+    { key: 'notificacoes', label: 'Notificações', href: 'admin-notificacoes.html', perm: 'notificacoes.visualizar', group: 'Sistema', icon: ICONS.notificacoes },
+    { key: 'equipe',       label: 'Equipe',       href: 'admin-equipe.html',       perm: 'equipe.gerenciar',        group: 'Sistema', icon: ICONS.equipe },
   ];
+
+  const NOTIF_CATS = [
+    { key: 'todas', label: 'Todas' },
+    { key: 'pedidos', label: 'Pedidos', color: 'var(--success)' },
+    { key: 'estoque', label: 'Estoque', color: 'var(--warning)' },
+    { key: 'clientes', label: 'Clientes', color: 'var(--primary)' },
+    { key: 'financeiro', label: 'Financeiro', color: 'var(--violet, #8B5CF6)' },
+    { key: 'sistema', label: 'Sistema', color: 'var(--danger)' },
+  ];
+  const NOTIF_ICON = {
+    pedidos: ICONS.pedidos,
+    estoque: ICONS.estoque,
+    clientes: ICONS.clientes,
+    financeiro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+    sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  };
 
   const FAQ = [
     { q: ['mudar cor do site', 'design system', 'tipografia', 'cor do preço', 'cor do botão'],
@@ -265,6 +287,141 @@ window.AdminShell = (function () {
     document.querySelectorAll('.chat-sugg-btn').forEach(b => b.addEventListener('click', () => ask(b.dataset.q)));
   }
 
+  /* ═══ NOTIFICAÇÕES ═══ */
+  let _notifCat = 'todas';
+  let _notifCache = [];
+
+  function timeAgoShell(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return 'há ' + min + ' min';
+    const h = Math.floor(min / 60);
+    if (h < 24) return 'há ' + h + 'h';
+    const d = Math.floor(h / 24);
+    if (d < 30) return 'há ' + d + (d === 1 ? ' dia' : ' dias');
+    return new Date(iso).toLocaleDateString('pt-BR');
+  }
+
+  async function refreshNotifBadge() {
+    if (!can('notificacoes.visualizar')) return;
+    try {
+      const { count } = await window.sb.from('notificacoes').select('id', { count: 'exact', head: true }).eq('lida', false);
+      const badge = document.getElementById('notifFabBadge');
+      if (!badge) return;
+      if (count) { badge.hidden = false; badge.textContent = count > 9 ? '9+' : count; }
+      else badge.hidden = true;
+    } catch (e) { /* silencioso */ }
+  }
+
+  function renderNotifList() {
+    const list = document.getElementById('notifList');
+    if (!list) return;
+    if (!_notifCache.length) { list.innerHTML = '<div class="notif-empty">Nenhuma notificação por aqui.</div>'; return; }
+    list.innerHTML = _notifCache.map(n => {
+      const cat = NOTIF_CATS.find(c => c.key === n.categoria) || {};
+      return `<div class="notif-item ${n.lida ? '' : 'unread'}" data-id="${n.id}" data-href="${n.link_href || ''}">
+        <div class="notif-item-ic" style="background:${cat.color || 'var(--primary)'}22;color:${cat.color || 'var(--primary)'}">${NOTIF_ICON[n.categoria] || ''}</div>
+        <div class="notif-item-body">
+          <div class="notif-item-title">${n.titulo}</div>
+          ${n.descricao ? `<div class="notif-item-desc">${n.descricao}</div>` : ''}
+          <div class="notif-item-time">${timeAgoShell(n.created_at)}</div>
+        </div>
+        <button class="notif-item-del" data-del="${n.id}" title="Excluir">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadNotifList() {
+    const list = document.getElementById('notifList');
+    if (!list) return;
+    list.innerHTML = '<div class="notif-empty">Carregando...</div>';
+    let q = window.sb.from('notificacoes').select('*').order('created_at', { ascending: false }).limit(30);
+    if (_notifCat !== 'todas') q = q.eq('categoria', _notifCat);
+    const { data } = await q;
+    _notifCache = data || [];
+    renderNotifList();
+  }
+
+  function toggleNotifications() {
+    const panel = document.getElementById('notifPanel');
+    if (!panel) return;
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) loadNotifList();
+  }
+
+  function mountNotifBell() {
+    if (!can('notificacoes.visualizar')) return;
+    if (document.getElementById('notifFab')) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <button class="notif-fab" id="notifFab" title="Notificações">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="notif-fab-badge" id="notifFabBadge" hidden>0</span>
+      </button>
+      <div class="notif-panel" id="notifPanel">
+        <div class="notif-head">
+          <div class="notif-head-title">Notificações</div>
+          <div class="notif-head-actions">
+            <button class="notif-mark-all" id="notifMarkAll">Marcar todas como lidas</button>
+            <button class="modal-close" id="notifClose">✕</button>
+          </div>
+        </div>
+        <div class="notif-tabs" id="notifTabs">
+          ${NOTIF_CATS.map(c => `<button class="notif-tab ${c.key === 'todas' ? 'active' : ''}" data-cat="${c.key}">${c.label}</button>`).join('')}
+        </div>
+        <div class="notif-list" id="notifList"><div class="notif-empty">Carregando...</div></div>
+        <div style="padding:10px 16px;border-top:1px solid var(--border-color);text-align:center;">
+          <a href="admin-notificacoes.html" style="font-size:11.5px;color:var(--primary);font-weight:700;">Ver histórico completo →</a>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+
+    const panel = document.getElementById('notifPanel');
+    document.getElementById('notifFab').addEventListener('click', () => toggleNotifications());
+    document.getElementById('notifClose').addEventListener('click', () => panel.classList.remove('open'));
+
+    document.getElementById('notifTabs').addEventListener('click', e => {
+      const btn = e.target.closest('.notif-tab');
+      if (!btn) return;
+      _notifCat = btn.dataset.cat;
+      document.querySelectorAll('#notifTabs .notif-tab').forEach(b => b.classList.toggle('active', b === btn));
+      loadNotifList();
+    });
+
+    document.getElementById('notifMarkAll').addEventListener('click', async () => {
+      await window.sb.from('notificacoes').update({ lida: true }).eq('lida', false);
+      await loadNotifList();
+      refreshNotifBadge();
+    });
+
+    document.getElementById('notifList').addEventListener('click', async e => {
+      const delBtn = e.target.closest('[data-del]');
+      if (delBtn) {
+        e.stopPropagation();
+        await window.sb.from('notificacoes').delete().eq('id', delBtn.dataset.del);
+        _notifCache = _notifCache.filter(n => String(n.id) !== delBtn.dataset.del);
+        renderNotifList();
+        refreshNotifBadge();
+        return;
+      }
+      const item = e.target.closest('.notif-item');
+      if (!item) return;
+      const id = item.dataset.id;
+      if (item.classList.contains('unread')) {
+        await window.sb.from('notificacoes').update({ lida: true }).eq('id', id);
+        item.classList.remove('unread');
+        refreshNotifBadge();
+      }
+      if (item.dataset.href) location.href = item.dataset.href;
+    });
+
+    refreshNotifBadge();
+    setInterval(refreshNotifBadge, 60000);
+  }
+
   function toast(msg, type) {
     let container = document.getElementById('adminToastContainer');
     if (!container) {
@@ -289,8 +446,9 @@ window.AdminShell = (function () {
     renderSidebar(activeKey);
     renderInsightBar();
     mountChat();
+    mountNotifBell();
     return { profile, can };
   }
 
-  return { init, can, toast, get profile() { return _profile; } };
+  return { init, can, toast, toggleNotifications, get profile() { return _profile; } };
 })();

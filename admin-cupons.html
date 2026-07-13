@@ -208,6 +208,8 @@ window.deleteCupom = async function (id) {
     document.getElementById('newCupomBtn').style.display = 'none';
   }
   await loadCupons();
+  const qParam = new URLSearchParams(location.search).get('q');
+  if (qParam) { document.getElementById('searchInp').value = qParam; renderTable(); }
 })();
 </script>
 </body>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Notificações — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.notif-cat-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 10px;border-radius:var(--radius-full);}
+.notif-row-title{font-weight:700;color:var(--text-main);}
+.notif-row-desc{font-size:11.5px;color:var(--text-muted);margin-top:2px;max-width:420px;}
+.notif-row.unread .notif-row-title::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--primary);margin-right:7px;}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;flex-wrap:wrap;}
+.pager-info{font-size:12px;color:var(--text-muted);}
+.pager-btns{display:flex;gap:8px;}
+.bulk-bar{display:flex;align-items:center;gap:10px;background:var(--primary-soft);border:1px solid rgba(37,99,235,.28);border-radius:var(--radius-md);padding:10px 16px;margin-bottom:14px;display:none;}
+.bulk-bar.show{display:flex;}
+.bulk-bar span{font-size:12.5px;color:var(--text-secondary);}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div class="admin-topbar-title">Notificações</div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-secondary" id="btnMarkAllRead">Marcar todas como lidas</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="search" class="search-box" id="fSearch" placeholder="Buscar por título ou descrição...">
+          <select id="fCategoria" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-main);font-size:13px;">
+            <option value="">Todas as categorias</option>
+            <option value="pedidos">Pedidos</option>
+            <option value="estoque">Estoque</option>
+            <option value="clientes">Clientes</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="sistema">Sistema</option>
+          </select>
+          <select id="fStatus" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-main);font-size:13px;">
+            <option value="">Lidas e não lidas</option>
+            <option value="unread">Só não lidas</option>
+            <option value="read">Só lidas</option>
+          </select>
+        </div>
+        <div id="totalCount" style="font-size:12.5px;color:var(--text-muted);"></div>
+      </div>
+
+      <div class="bulk-bar" id="bulkBar">
+        <span id="bulkCount">0 selecionadas</span>
+        <button class="btn btn-secondary btn-sm" id="bulkMarkRead">Marcar como lidas</button>
+        <button class="btn btn-danger btn-sm" id="bulkDelete">Excluir</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th style="width:36px;"><input type="checkbox" id="chkAll"></th>
+            <th>Categoria</th>
+            <th>Notificação</th>
+            <th>Status</th>
+            <th>Quando</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
+        </table>
+        <div class="pager">
+          <div class="pager-info" id="pagerInfo">—</div>
+          <div class="pager-btns">
+            <button class="btn btn-secondary btn-sm" id="btnPrev">← Anterior</button>
+            <button class="btn btn-secondary btn-sm" id="btnNext">Próxima →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script>
+const PAGE_SIZE = 25;
+const CAT_LABELS = { pedidos:'Pedidos', estoque:'Estoque', clientes:'Clientes', financeiro:'Financeiro', sistema:'Sistema' };
+const CAT_PILL = { pedidos:'green', estoque:'amber', clientes:'blue', financeiro:'gray', sistema:'red' };
+let page = 0;
+let totalRows = 0;
+let ROWS = [];
+let searchTimer = null;
+
+function fmtWhen(iso) {
+  return new Date(iso).toLocaleDateString('pt-BR') + ' ' + new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function buildQuery() {
+  let q = window.sb.from('notificacoes').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+  const cat = document.getElementById('fCategoria').value;
+  const status = document.getElementById('fStatus').value;
+  const search = document.getElementById('fSearch').value.trim();
+  if (cat) q = q.eq('categoria', cat);
+  if (status === 'unread') q = q.eq('lida', false);
+  if (status === 'read') q = q.eq('lida', true);
+  if (search) q = q.or(`titulo.ilike.%${search}%,descricao.ilike.%${search}%`);
+  return q.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+}
+
+async function loadPage() {
+  document.getElementById('tbody').innerHTML = '<tr><td colspan="6" class="table-empty">Carregando...</td></tr>';
+  const { data, count } = await buildQuery();
+  ROWS = data || [];
+  totalRows = count || 0;
+  renderTable();
+  renderPager();
+  updateBulkBar();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  if (!ROWS.length) { tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Nenhuma notificação encontrada.</td></tr>'; return; }
+  tbody.innerHTML = ROWS.map(n => `
+    <tr class="notif-row ${n.lida ? '' : 'unread'}">
+      <td><input type="checkbox" class="rowChk" value="${n.id}"></td>
+      <td><span class="notif-cat-pill status-pill ${CAT_PILL[n.categoria] || 'gray'}">${CAT_LABELS[n.categoria] || n.categoria}</span></td>
+      <td>
+        <div class="notif-row-title">${n.titulo}</div>
+        ${n.descricao ? `<div class="notif-row-desc">${n.descricao}</div>` : ''}
+      </td>
+      <td><span class="status-pill ${n.lida ? 'gray' : 'blue'}">${n.lida ? 'Lida' : 'Não lida'}</span></td>
+      <td>${fmtWhen(n.created_at)}</td>
+      <td>
+        <div class="table-actions">
+          ${n.link_href ? `<button class="btn btn-secondary btn-sm" onclick="abrirNotif('${n.id}','${n.link_href}')">Abrir</button>` : ''}
+          ${!n.lida ? `<button class="btn btn-secondary btn-sm" onclick="marcarLida('${n.id}')">Marcar lida</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="excluirNotif('${n.id}')">Excluir</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  document.querySelectorAll('.rowChk').forEach(c => c.addEventListener('change', updateBulkBar));
+}
+
+function renderPager() {
+  const from = totalRows ? page * PAGE_SIZE + 1 : 0;
+  const to = Math.min(totalRows, page * PAGE_SIZE + PAGE_SIZE);
+  document.getElementById('pagerInfo').textContent = totalRows ? `${from}–${to} de ${totalRows}` : 'Nenhum resultado';
+  document.getElementById('totalCount').textContent = totalRows + ' notificaç' + (totalRows === 1 ? 'ão' : 'ões');
+  document.getElementById('btnPrev').disabled = page === 0;
+  document.getElementById('btnNext').disabled = to >= totalRows;
+}
+
+function selectedIds() {
+  return Array.from(document.querySelectorAll('.rowChk:checked')).map(c => c.value);
+}
+
+function updateBulkBar() {
+  const ids = selectedIds();
+  document.getElementById('bulkBar').classList.toggle('show', ids.length > 0);
+  document.getElementById('bulkCount').textContent = ids.length + ' selecionada' + (ids.length !== 1 ? 's' : '');
+  document.getElementById('chkAll').checked = ids.length > 0 && ids.length === ROWS.length;
+}
+
+window.marcarLida = async function (id) {
+  await window.sb.from('notificacoes').update({ lida: true }).eq('id', id);
+  loadPage();
+};
+window.excluirNotif = async function (id) {
+  if (!confirm('Excluir esta notificação?')) return;
+  await window.sb.from('notificacoes').delete().eq('id', id);
+  loadPage();
+};
+window.abrirNotif = async function (id, href) {
+  await window.sb.from('notificacoes').update({ lida: true }).eq('id', id);
+  location.href = href;
+};
+
+document.getElementById('chkAll').addEventListener('change', (e) => {
+  document.querySelectorAll('.rowChk').forEach(c => c.checked = e.target.checked);
+  updateBulkBar();
+});
+
+document.getElementById('bulkMarkRead').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  await window.sb.from('notificacoes').update({ lida: true }).in('id', ids);
+  loadPage();
+});
+document.getElementById('bulkDelete').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length || !confirm('Excluir ' + ids.length + ' notificação(ões)?')) return;
+  await window.sb.from('notificacoes').delete().in('id', ids);
+  loadPage();
+});
+
+document.getElementById('btnMarkAllRead').addEventListener('click', async () => {
+  await window.sb.from('notificacoes').update({ lida: true }).eq('lida', false);
+  loadPage();
+});
+
+document.getElementById('btnPrev').addEventListener('click', () => { if (page > 0) { page--; loadPage(); } });
+document.getElementById('btnNext').addEventListener('click', () => { page++; loadPage(); });
+
+['fCategoria', 'fStatus'].forEach(id => document.getElementById(id).addEventListener('change', () => { page = 0; loadPage(); }));
+document.getElementById('fSearch').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { page = 0; loadPage(); }, 300);
+});
+
+(async function () {
+  const session = await AdminShell.init('notificacoes');
+  if (!session) return;
+  await loadPage();
+})();
+</script>
+</body>
+</html>
