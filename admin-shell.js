@@ -307,10 +307,14 @@ window.AdminShell = (function () {
     if (!can('notificacoes.visualizar')) return;
     try {
       const { count } = await window.sb.from('notificacoes').select('id', { count: 'exact', head: true }).eq('lida', false);
-      const badge = document.getElementById('notifFabBadge');
-      if (!badge) return;
-      if (count) { badge.hidden = false; badge.textContent = count > 9 ? '9+' : count; }
-      else badge.hidden = true;
+      // Além do badge do sino flutuante, qualquer elemento marcado com
+      // data-notif-badge (ex: o sino que já mora no topbar do Dashboard)
+      // recebe o mesmo contador — sem precisar acoplar admin-shell.js a
+      // um id específico de página.
+      document.querySelectorAll('#notifFabBadge, [data-notif-badge]').forEach(badge => {
+        if (count) { badge.hidden = false; badge.textContent = count > 9 ? '9+' : count; }
+        else badge.hidden = true;
+      });
     } catch (e) { /* silencioso */ }
   }
 
