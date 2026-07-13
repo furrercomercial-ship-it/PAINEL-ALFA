@@ -87,43 +87,128 @@ window.AdminShell = (function () {
   };
 
   const FAQ = [
-    { q: ['mudar cor do site', 'design system', 'tipografia', 'cor do preço', 'cor do botão'],
-      a: 'Vá em <b>Aparência → Design System</b>. Lá dá pra mudar cores de preço/PIX/parcelamento/botões separadamente, tipografia e estilo de botão — sempre com "Salvar rascunho" antes de "Publicar", e um preview ao vivo do site.' },
-    { q: ['mudar texto do botão', 'trocar texto', 'editar texto do site'],
-      a: 'Vá em <b>Aparência → Textos</b> — lista os textos de botões/rótulos que já estão conectados ao site (mais vão sendo adicionados aos poucos).' },
-    { q: ['reordenar seção', 'mover bloco', 'esconder seção', 'arrastar bloco'],
-      a: 'Vá em <b>Aparência → Blocos das Páginas</b> — arraste pra reordenar, use o olho pra mostrar/ocultar, e o cadeado pra travar a posição. Funciona em Produto, Categoria, Carrinho, Checkout e Minha Conta.' },
-    { q: ['criar página', 'nova página', 'política de privacidade', 'termos de uso', 'página de contato'],
-      a: 'Vá em <b>Aparência → Páginas</b>. As páginas institucionais (política, termos, garantia etc.), contato, suporte e outras já existem prontas pra você editar — lembre de marcar "Publicada" quando terminar.' },
-    { q: ['adicionar produto', 'criar produto', 'novo produto', 'cadastrar produto'],
+    // ── PRODUTOS ──────────────────────────────────────────────────────────
+    { topic: 'Produtos', q: ['adicionar produto', 'criar produto', 'novo produto', 'cadastrar produto'],
       a: 'Vá em <b>Produtos</b> no menu lateral e clique em <b>Novo Produto</b>. Preencha nome, categoria, preço e estoque — os outros campos são opcionais.' },
-    { q: ['alterar banner', 'editar banner', 'trocar banner', 'banner'],
-      a: 'Vá em <b>Aparência → Banners</b> (ou <b>Hero / Banner</b> pro carrossel do topo) e clique em <b>Novo</b> — dá pra subir a imagem, definir link e ordem de exibição.' },
-    { q: ['ver lucro', 'meu lucro', 'quanto lucrei', 'margem de lucro', 'lucro líquido'],
-      a: 'Vá em <b>Lucro</b> no menu lateral. Ele calcula receita, custo dos produtos vendidos e despesas automaticamente — só depende de você ter preenchido o <b>Preço de Custo</b> em cada produto e cadastrado suas despesas em <b>Despesas</b>.' },
-    { q: ['cadastrar despesa', 'nova despesa', 'custo fixo', 'aluguel', 'gastos da loja'],
-      a: 'Vá em <b>Despesas</b> no menu lateral e clique em <b>Nova Despesa</b>. Marque "recorrente" pra custos que se repetem todo mês (aluguel, salários, assinaturas) — eles entram automaticamente no cálculo de lucro de cada mês.' },
-    { q: ['google analytics', 'meta pixel', 'facebook pixel', 'tiktok pixel', 'google tag manager', 'instalar script', 'cookie', 'consentimento'],
-      a: 'Vá em <b>Aparência → Integrações e Scripts</b>. Pra Google Analytics, Meta Pixel, TikTok Pixel e outras ferramentas conhecidas, basta colar o ID na aba <b>Integrações</b> — não precisa entender código. Pra qualquer outro script, use a aba <b>Scripts personalizados</b>.' },
-    { q: ['criar cupom', 'novo cupom', 'cupom de desconto'],
-      a: 'Vá em <b>Cupons</b> no menu lateral e clique em <b>Novo Cupom</b>. Defina o código, tipo de desconto (percentual ou valor fixo), pedido mínimo e validade — ele já passa a funcionar no checkout.' },
-    { q: ['mudar cor', 'cores do site', 'personalizar site', 'trocar cor'],
-      a: 'Vá em <b>Aparência → Cores</b> pra mudar a paleta com preview ao vivo, ou <b>Aparência → Identidade Visual</b> pra trocar logo e favicon.' },
-    { q: ['criar categoria', 'nova categoria', 'adicionar categoria'],
-      a: 'Vá em <b>Categorias</b>, clique em <b>Nova Categoria</b> (ou <b>Nova Subcategoria</b> dentro de uma categoria existente) e preencha nome e ordem de exibição.' },
-    { q: ['colocar em promoção', 'produto em promoção', 'promoção', 'desconto'],
+    { topic: 'Produtos', q: ['colocar em promoção', 'produto em promoção', 'promoção', 'desconto no produto'],
       a: 'Edite o produto em <b>Produtos</b> e preencha o campo <b>Preço Antigo</b> com um valor maior que o Preço atual — o desconto aparece automaticamente na loja.' },
-    { q: ['aumentar estoque', 'estoque', 'reposição'],
-      a: 'Edite o produto em <b>Produtos</b> e ajuste o campo <b>Estoque</b>. Produtos com estoque abaixo do mínimo aparecem no aviso no topo do painel.' },
-    { q: ['status do pedido', 'alterar pedido', 'mudar status'],
-      a: 'Vá em <b>Pedidos</b>, abra o pedido desejado e altere o status no seletor — a mudança é salva na hora.' },
-    { q: ['bloquear cliente', 'cliente'],
-      a: 'Vá em <b>Clientes</b>, abra o cliente e use o botão <b>Bloquear</b>.' },
-    { q: ['aprovar avaliação', 'moderar avaliação', 'avaliação'],
-      a: 'Vá em <b>Avaliações</b> — lá você aprova, rejeita ou exclui avaliações enviadas pelos clientes.' },
-    { q: ['criar conta', 'novo funcionário', 'equipe', 'permissão', 'cargo'],
-      a: 'Vá em <b>Equipe</b> (apenas Administradores) para criar contas de funcionários e definir o cargo de cada um.' },
+    { topic: 'Produtos', q: ['sku', 'ean', 'ncm', 'código interno', 'código de barras do produto'],
+      a: 'Esses campos ficam na edição do produto, em <b>Produtos</b>: <b>SKU</b> e <b>Código Interno</b> são identificadores seus, <b>EAN</b> é o código de barras oficial, <b>NCM</b> é o código fiscal. Nenhum é obrigatório pro produto aparecer na loja.' },
+    { topic: 'Produtos', q: ['imagem do produto', 'foto do produto', 'trocar foto', 'produto sem imagem'],
+      a: 'Na edição do produto em <b>Produtos</b>, tem um campo de imagens onde você sobe uma ou mais fotos — a primeira é a capa usada nos cards. Produto sem nenhuma imagem mostra uma caixa neutra em vez de foto quebrada.' },
+    { topic: 'Produtos', q: ['duplicar produto', 'copiar produto'],
+      a: 'Na lista de <b>Produtos</b>, clique em <b>Duplicar</b> na linha do produto — cria uma cópia com "(cópia)" no nome pra você editar rapidamente sem preencher tudo de novo.' },
+    { topic: 'Produtos', q: ['excluir produto', 'apagar produto', 'remover produto'],
+      a: 'Na lista de <b>Produtos</b>, clique em <b>Excluir</b> na linha do produto (precisa da permissão "Excluir produtos"). Cuidado: produtos com pedidos já feitos ficam sem o produto original, mas o pedido mantém os dados salvos na hora da compra.' },
+    { topic: 'Produtos', q: ['produto inativo', 'desativar produto', 'ativo'],
+      a: 'Edite o produto e desmarque <b>Ativo</b> — ele some da loja pro cliente mas continua no painel, sem precisar excluir.' },
+
+    // ── CATEGORIAS ────────────────────────────────────────────────────────
+    { topic: 'Categorias', q: ['criar categoria', 'nova categoria', 'adicionar categoria'],
+      a: 'Vá em <b>Categorias</b>, clique em <b>Nova Categoria</b> (ou <b>Nova Subcategoria</b> dentro de uma categoria existente) e preencha nome e ordem de exibição.' },
+    { topic: 'Categorias', q: ['reordenar categoria', 'mudar ordem das categorias', 'categoria não aparece no menu'],
+      a: 'Em <b>Categorias</b>, use as setinhas ▲▼ pra reordenar categorias e subcategorias — a ordem no painel é a mesma ordem que aparece no menu do site.' },
+    { topic: 'Categorias', q: ['subcategoria não aparece', 'barra de subcategorias sumiu'],
+      a: 'Confere duas coisas: (1) em <b>Categorias</b>, se a categoria realmente tem subcategorias cadastradas e ativas; (2) em <b>Aparência → Blocos das Páginas → Categoria</b>, se o bloco "Subcategorias" está antes de "Grade de produtos" na ordem — se estiver depois, ele fica "escondido" no fim da página.' },
+
+    // ── PEDIDOS ───────────────────────────────────────────────────────────
+    { topic: 'Pedidos', q: ['status do pedido', 'alterar pedido', 'mudar status', 'marcar como pago'],
+      a: 'Vá em <b>Pedidos</b>, abra o pedido desejado e altere o status no seletor — a mudança é salva na hora. Marcar como <b>Pago</b> desconta o estoque automaticamente; cancelar um pedido que já estava pago devolve o estoque.' },
+    { topic: 'Pedidos', q: ['buscar pedido', 'encontrar pedido', 'número do pedido'],
+      a: 'Em <b>Pedidos</b>, usa a busca no topo por número do pedido — ou pesquisa pelo sino de busca do Dashboard, que já abre a tela filtrada.' },
+    { topic: 'Pedidos', q: ['rastreio', 'código de rastreio', 'transportadora'],
+      a: 'Abrindo o pedido em <b>Pedidos</b> dá pra preencher o código de rastreio e a transportadora — isso é só informativo, não calcula frete automático de nenhuma transportadora ainda.' },
+
+    // ── CLIENTES ──────────────────────────────────────────────────────────
+    { topic: 'Clientes', q: ['bloquear cliente', 'desbloquear cliente'],
+      a: 'Vá em <b>Clientes</b>, abra o cliente e use o botão <b>Bloquear</b> (ou <b>Desbloquear</b>). Cliente bloqueado não consegue mais fazer login na loja.' },
+    { topic: 'Clientes', q: ['ver pedidos do cliente', 'histórico do cliente'],
+      a: 'Abrindo o cliente em <b>Clientes</b> você vê os dados cadastrados e pode conferir os pedidos dele cruzando com a tela de <b>Pedidos</b> (filtrando pelo nome/e-mail).' },
+    { topic: 'Clientes', q: ['novo cliente', 'cliente se cadastrou'],
+      a: 'Todo cadastro novo na loja aparece automaticamente em <b>Clientes</b> e gera uma notificação (categoria "Clientes") no sino de notificações.' },
+
+    // ── CUPONS ────────────────────────────────────────────────────────────
+    { topic: 'Cupons', q: ['criar cupom', 'novo cupom', 'cupom de desconto'],
+      a: 'Vá em <b>Cupons</b> no menu lateral e clique em <b>Novo Cupom</b>. Defina o código, tipo de desconto (percentual ou valor fixo), pedido mínimo e validade — ele já passa a funcionar no checkout.' },
+    { topic: 'Cupons', q: ['cupom não funciona', 'cupom não aplica', 'cupom expirado'],
+      a: 'Confere em <b>Cupons</b> se ele está <b>ativo</b>, dentro da validade, e se o pedido bate com o valor mínimo exigido — qualquer um desses fora do combinado faz o checkout recusar o código.' },
+    { topic: 'Cupons', q: ['limite de uso do cupom', 'quantas vezes o cupom pode ser usado'],
+      a: 'Ao criar/editar o cupom em <b>Cupons</b>, tem um campo de limite de uso total — o sistema conta sozinho quantas vezes já foi usado e bloqueia depois de bater o limite.' },
+
+    // ── ESTOQUE ───────────────────────────────────────────────────────────
+    { topic: 'Estoque', q: ['aumentar estoque', 'estoque', 'reposição', 'entrada de estoque'],
+      a: 'Vá em <b>Estoque → Itens em Estoque</b> e clique em <b>Movimentar</b> no produto — escolha "Entrada manual" ou "Reposição", a quantidade e um motivo. O estoque atualiza sozinho e fica registrado no histórico.' },
+    { topic: 'Estoque', q: ['tirar do estoque', 'saída de estoque', 'ajuste de estoque', 'corrigir estoque'],
+      a: 'Em <b>Estoque → Itens em Estoque</b>, clique em <b>Movimentar</b> e escolha "Saída manual" (pra tirar uma quantidade) ou "Ajuste" (pra digitar o +/- direto, útil quando é só correção de contagem).' },
+    { topic: 'Estoque', q: ['histórico de estoque', 'quem mexeu no estoque', 'movimentação do produto'],
+      a: 'Em <b>Estoque → Itens em Estoque</b>, clique em <b>Histórico</b> no produto — mostra toda entrada/saída, incluindo vendas e cancelamentos automáticos, com data, usuário e saldo depois de cada movimento.' },
+    { topic: 'Estoque', q: ['estoque baixo', 'estoque mínimo', 'aviso de estoque'],
+      a: 'Cada produto tem um campo de <b>Estoque Mínimo</b> (em Produtos). Quando o estoque cai pra esse nível ou menos, o produto entra na lista de "Estoque baixo" no Dashboard e em Estoque, e gera uma notificação automática.' },
+    { topic: 'Estoque', q: ['localização no estoque', 'onde fica o produto', 'prateleira'],
+      a: 'Em <b>Estoque → Itens em Estoque</b> tem uma coluna "Localização" editável direto na tabela — digite algo como "Prateleira A3" e clica fora pra salvar.' },
+    { topic: 'Estoque', q: ['estoque desconta sozinho', 'baixa automática de estoque', 'venda desconta estoque'],
+      a: 'Sim — quando você marca um pedido como <b>Pago</b> em Pedidos, o estoque de cada produto do pedido desconta sozinho. Se depois cancelar esse pedido, o estoque volta automaticamente.' },
+
+    // ── FINANCEIRO ────────────────────────────────────────────────────────
+    { topic: 'Financeiro', q: ['ver lucro', 'meu lucro', 'quanto lucrei', 'margem de lucro', 'lucro líquido'],
+      a: 'Vá em <b>Lucro</b> no menu lateral. Ele calcula receita, custo dos produtos vendidos e despesas automaticamente — só depende de você ter preenchido o <b>Preço de Custo</b> em cada produto e cadastrado suas despesas em <b>Despesas</b>.' },
+    { topic: 'Financeiro', q: ['cadastrar despesa', 'nova despesa', 'custo fixo', 'aluguel', 'gastos da loja'],
+      a: 'Vá em <b>Despesas</b> no menu lateral e clique em <b>Nova Despesa</b>. Marque "recorrente" pra custos que se repetem todo mês (aluguel, salários, assinaturas) — eles entram automaticamente no cálculo de lucro de cada mês.' },
+    { topic: 'Financeiro', q: ['preço de custo', 'custo do produto', 'cmv'],
+      a: 'Preenche o <b>Preço de Custo</b> na edição de cada produto (tela Produtos) — é isso que alimenta o cálculo de lucro bruto e o "Resumo Financeiro" do Dashboard.' },
+
+    // ── AVALIAÇÕES ────────────────────────────────────────────────────────
+    { topic: 'Avaliações', q: ['aprovar avaliação', 'moderar avaliação', 'avaliação', 'rejeitar avaliação'],
+      a: 'Vá em <b>Avaliações</b> — lá você aprova, rejeita ou exclui avaliações enviadas pelos clientes. Só avaliações aprovadas aparecem na página do produto e contam na nota média.' },
+
+    // ── EQUIPE ────────────────────────────────────────────────────────────
+    { topic: 'Equipe', q: ['criar conta', 'novo funcionário', 'equipe', 'permissão', 'cargo'],
+      a: 'Vá em <b>Equipe</b> (apenas Administradores) para criar contas de funcionários e definir o cargo de cada um. Cada cargo já vem com um conjunto padrão de permissões que dá pra ajustar individualmente.' },
+    { topic: 'Equipe', q: ['mudar permissão', 'dar acesso', 'tirar acesso'],
+      a: 'Em <b>Equipe</b>, abra o funcionário e ajusta as permissões marcadas — cada tela do painel (Produtos, Pedidos, Estoque etc.) tem sua própria permissão, então dá pra liberar só o que a pessoa precisa.' },
+
+    // ── DASHBOARD ─────────────────────────────────────────────────────────
+    { topic: 'Dashboard', q: ['mudar período', 'período personalizado', 'filtrar por data', 'período do dashboard'],
+      a: 'No topo do Dashboard tem os atalhos 7/30/90 dias e um seletor com mais opções (Hoje, Ontem, Este mês, Mês passado, Este ano, Período personalizado). Escolher qualquer um atualiza receita, gráfico, pedidos e produtos mais vendidos juntos.' },
+    { topic: 'Dashboard', q: ['buscar produto no painel', 'busca global', 'pesquisar cliente', 'pesquisar pedido'],
+      a: 'A busca no topo do Dashboard pesquisa em Produtos, Categorias, Clientes, Pedidos e Cupons ao mesmo tempo, em tempo real. Clicar num resultado já abre a tela certa com o filtro aplicado.' },
+    { topic: 'Dashboard', q: ['gráfico de receita', 'receita não bate'],
+      a: 'O gráfico de receita do Dashboard só conta pedidos com status diferente de "Aguardando Pagamento" e "Cancelado" — ou seja, receita de verdade, não venda pendente.' },
+
+    // ── NOTIFICAÇÕES ──────────────────────────────────────────────────────
+    { topic: 'Notificações', q: ['notificação', 'sino', 'aviso de pedido novo', 'marcar como lida'],
+      a: 'O sino (no topo do Dashboard, ou flutuante nas outras telas) avisa sozinho sobre pedido novo/pago/cancelado/enviado/entregue, estoque baixo/zerado e cliente novo. Clica pra ver, marcar como lida ou excluir; o histórico completo fica em <b>Notificações</b> no menu.' },
+    { topic: 'Notificações', q: ['notificação de estoque baixo', 'aviso de estoque zerado'],
+      a: 'Sempre que um produto cruza o estoque mínimo ou zera, uma notificação é criada automaticamente na categoria "Estoque" — não precisa configurar nada.' },
+
+    // ── APARÊNCIA — DESIGN SYSTEM / IDENTIDADE ───────────────────────────
+    { topic: 'Aparência', q: ['mudar cor do site', 'design system', 'tipografia', 'cor do preço', 'cor do botão', 'mudar cor', 'cores do site', 'personalizar site', 'trocar cor'],
+      a: 'Vá em <b>Aparência → Design System</b>. Lá dá pra mudar cores de preço/PIX/parcelamento/botões separadamente, tipografia e estilo de botão — sempre com "Salvar rascunho" antes de "Publicar", e um preview ao vivo do site.' },
+    { topic: 'Aparência', q: ['trocar logo', 'trocar favicon', 'identidade visual'],
+      a: 'Vá em <b>Aparência → Identidade Visual</b> pra trocar logo (modo claro/escuro) e favicon.' },
+    { topic: 'Aparência', q: ['mudar texto do botão', 'trocar texto', 'editar texto do site'],
+      a: 'Vá em <b>Aparência → Textos</b> — lista os textos de botões/rótulos que já estão conectados ao site (mais vão sendo adicionados aos poucos).' },
+    { topic: 'Aparência', q: ['reordenar seção', 'mover bloco', 'esconder seção', 'arrastar bloco'],
+      a: 'Vá em <b>Aparência → Blocos das Páginas</b> — arraste pra reordenar, use o olho pra mostrar/ocultar, e o cadeado pra travar a posição. Funciona em Homepage, Produto, Categoria, Carrinho, Checkout e Minha Conta.' },
+    { topic: 'Aparência', q: ['criar página', 'nova página', 'política de privacidade', 'termos de uso', 'página de contato'],
+      a: 'Vá em <b>Aparência → Páginas</b>. As páginas institucionais (política, termos, garantia etc.), contato, suporte e outras já existem prontas pra você editar — lembre de marcar "Publicada" quando terminar.' },
+    { topic: 'Aparência', q: ['editar cabeçalho', 'menu do topo', 'header do site'],
+      a: 'Vá em <b>Aparência → Header</b> pra editar os links do menu superior e a barra de topo do site.' },
+    { topic: 'Aparência', q: ['carrossel da home', 'banner principal', 'hero'],
+      a: 'Vá em <b>Aparência → Hero / Banner</b> pra editar o carrossel grande do topo da homepage.' },
+    { topic: 'Aparência', q: ['alterar banner', 'editar banner', 'trocar banner', 'banner'],
+      a: 'Vá em <b>Aparência → Banners</b> (ou <b>Hero / Banner</b> pro carrossel do topo) e clique em <b>Novo</b> — dá pra subir a imagem, definir link e ordem de exibição.' },
+    { topic: 'Aparência', q: ['popup', 'pop-up de desconto', 'aviso na tela'],
+      a: 'Vá em <b>Aparência → Popups</b> pra criar avisos, cupons ou newsletter que aparecem em cima do site — cada tipo tem seu próprio visual.' },
+    { topic: 'Aparência', q: ['organizar homepage', 'seções da home', 'ordem da homepage'],
+      a: 'Vá em <b>Aparência → Homepage</b> pra arrastar e reordenar as seções e categorias em destaque da página inicial.' },
+    { topic: 'Aparência', q: ['seo', 'aparecer no google', 'meta description', 'título da página no google'],
+      a: 'Vá em <b>Aparência → SEO</b> pra configurar título/descrição padrão do site pros mecanismos de busca.' },
+    { topic: 'Aparência', q: ['google analytics', 'meta pixel', 'facebook pixel', 'tiktok pixel', 'google tag manager', 'instalar script', 'cookie', 'consentimento'],
+      a: 'Vá em <b>Aparência → Integrações e Scripts</b>. Pra Google Analytics, Meta Pixel, TikTok Pixel e outras ferramentas conhecidas, basta colar o ID na aba <b>Integrações</b> — não precisa entender código. Pra qualquer outro script, use a aba <b>Scripts personalizados</b>.' },
   ];
+
+  const FAQ_TOPICS = [...new Set(FAQ.map(f => f.topic))];
 
   let _profile = null;
   let _permKeys = new Set();
@@ -236,7 +321,7 @@ window.AdminShell = (function () {
         if (hit >= 2 && hit > bestScore) { bestScore = hit; best = entry; }
       });
     });
-    return best ? best.a : 'Não tenho uma resposta pronta pra isso ainda. Tente perguntar sobre produtos, categorias, pedidos, clientes, avaliações ou equipe — ou use os atalhos abaixo.';
+    return best ? best.a : 'Não tenho uma resposta pronta pra isso ainda. Escolhe um dos tópicos abaixo (' + FAQ_TOPICS.join(', ') + ') pra ver as perguntas mais comuns de cada área.';
   }
 
   function mountChat() {
@@ -251,12 +336,10 @@ window.AdminShell = (function () {
           <button class="modal-close" id="adminChatClose">✕</button>
         </div>
         <div class="chat-body" id="adminChatBody">
-          <div class="chat-msg bot">Oi! Posso te ajudar a usar o painel. Pergunte algo como "como adiciono um produto?" ou escolha um atalho abaixo.</div>
+          <div class="chat-msg bot">Oi! Posso te ajudar a usar o painel. Digite sua dúvida ou escolhe um tópico abaixo pra ver as perguntas mais comuns.</div>
         </div>
-        <div class="chat-suggestions">
-          <button class="chat-sugg-btn" data-q="Como adiciono um produto?">Como adiciono um produto?</button>
-          <button class="chat-sugg-btn" data-q="Como coloco um produto em promoção?">Como coloco um produto em promoção?</button>
-          <button class="chat-sugg-btn" data-q="Como crio uma categoria?">Como crio uma categoria?</button>
+        <div class="chat-topics" id="chatTopics">
+          ${FAQ_TOPICS.map(t => `<button class="chat-topic-btn" data-topic="${t}">${t}</button>`).join('')}
         </div>
         <div class="chat-input-row">
           <input type="text" id="adminChatInput" placeholder="Digite sua pergunta...">
@@ -277,6 +360,24 @@ window.AdminShell = (function () {
       body.insertAdjacentHTML('beforeend', `<div class="chat-msg bot">${chatAnswer(text)}</div>`);
       body.scrollTop = body.scrollHeight;
     }
+    // Delegação: qualquer botão de sugestão inserido depois (via tópico)
+    // também funciona, sem precisar religar listener toda hora.
+    body.addEventListener('click', e => {
+      const b = e.target.closest('.chat-sugg-btn[data-q]');
+      if (b) ask(b.dataset.q);
+    });
+    document.getElementById('chatTopics').addEventListener('click', e => {
+      const btn = e.target.closest('.chat-topic-btn');
+      if (!btn) return;
+      const topic = btn.dataset.topic;
+      const items = FAQ.filter(f => f.topic === topic);
+      const listHtml = items.map(f => {
+        const label = f.q[0].charAt(0).toUpperCase() + f.q[0].slice(1) + '?';
+        return `<button class="chat-sugg-btn" data-q="${label.replace(/"/g, '&quot;')}">${label}</button>`;
+      }).join('');
+      body.insertAdjacentHTML('beforeend', `<div class="chat-msg bot">Perguntas sobre <b>${topic}</b>:</div><div class="chat-suggestions">${listHtml}</div>`);
+      body.scrollTop = body.scrollHeight;
+    });
     document.getElementById('adminChatSend').addEventListener('click', () => {
       const inp = document.getElementById('adminChatInput');
       ask(inp.value); inp.value = '';
@@ -284,7 +385,6 @@ window.AdminShell = (function () {
     document.getElementById('adminChatInput').addEventListener('keydown', e => {
       if (e.key === 'Enter') { ask(e.target.value); e.target.value = ''; }
     });
-    document.querySelectorAll('.chat-sugg-btn').forEach(b => b.addEventListener('click', () => ask(b.dataset.q)));
   }
 
   /* ═══ NOTIFICAÇÕES ═══ */
