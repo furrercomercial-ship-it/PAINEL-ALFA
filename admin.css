@@ -120,10 +120,31 @@ button,input,select,textarea{font-family:inherit;}
 .status-pill.blue{background:var(--primary-soft);color:var(--primary);}
 
 .table-wrap{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm);}
-.table-wrap:has(table){overflow-x:auto;}
+.table-wrap:has(table){
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  /* "sombra de rolagem": some sozinha quando tem mais conteúdo pra rolar
+     pra aquele lado, e desaparece quando chega na ponta — tudo em CSS,
+     sem precisar de JS ouvindo o scroll. */
+  background-color:var(--bg-card);
+  background-image:
+    linear-gradient(to right, var(--bg-card), transparent),
+    linear-gradient(to left, var(--bg-card), transparent),
+    linear-gradient(to right, rgba(0,0,0,.22), transparent),
+    linear-gradient(to left, rgba(0,0,0,.22), transparent);
+  background-position:left center, right center, left center, right center;
+  background-size:24px 100%, 24px 100%, 10px 100%, 10px 100%;
+  background-repeat:no-repeat;
+  background-attachment:local, local, scroll, scroll;
+}
 table.data-table{width:100%;border-collapse:collapse;font-size:13px;}
 .data-table th{text-align:left;padding:13px 18px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:1px solid var(--border-color);white-space:nowrap;background:rgba(128,128,128,.035);}
 .data-table td{padding:13px 18px;border-bottom:1px solid var(--border-color);color:var(--text-secondary);vertical-align:middle;}
+/* Primeira coluna fixa (sticky) enquanto o resto rola — assim o usuário
+   sempre sabe de qual linha (produto/pedido/cliente) aquela ação é. */
+.data-table th:first-child,.data-table td:first-child{position:sticky;left:0;z-index:1;background:var(--bg-card);border-right:1px solid var(--border-color);}
+.data-table th:first-child{background:var(--bg-card-2);z-index:2;}
+.data-table tr:hover td:first-child{background:var(--bg-card-2);}
 .data-table tr:last-child td{border-bottom:none;}
 .data-table tr{transition:background .12s var(--ease);}
 .data-table tr:hover td{background:rgba(128,128,128,.045);}
@@ -256,13 +277,30 @@ input[type="search"]:focus,.search-box:focus{border-color:var(--primary);}
 @keyframes toastOut{to{opacity:0;transform:translateX(-12px)}}
 
 /* ═══ MOBILE ═══ */
-.admin-mob-toggle{display:none;background:transparent;border:none;color:var(--text-main);cursor:pointer;}
+.admin-mob-toggle{display:none;align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-main);cursor:pointer;margin-right:10px;}
+.admin-mob-toggle svg{width:20px;height:20px;}
+.admin-sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:399;}
+.admin-sidebar-backdrop.open{display:block;}
 @media(max-width:900px){
   .admin-sidebar{position:fixed;left:-260px;top:0;bottom:0;z-index:400;transition:left .25s var(--ease);}
-  .admin-sidebar.open{left:0;}
+  .admin-sidebar.open{left:0;box-shadow:var(--shadow-lg);}
   .admin-mob-toggle{display:flex;}
   .field-row{grid-template-columns:1fr;}
   .chat-panel{width:calc(100vw - 32px);right:16px;}
   .admin-content{padding:20px 16px 80px;}
-  .admin-topbar{padding:14px 16px;}
+  .admin-topbar{padding:14px 16px;justify-content:flex-start;flex-wrap:wrap;row-gap:10px;}
+  .admin-topbar-title{font-size:16px;}
+  .admin-topbar-actions{margin-left:auto;}
+  /* Toque confortável (~44px) em botões e campos, sem mudar a densidade do desktop */
+  .btn{min-height:44px;}
+  .btn-sm{min-height:40px;padding:8px 14px;font-size:12.5px;}
+  .table-actions{gap:8px;flex-wrap:wrap;}
+  .table-actions .btn-sm{min-height:44px;}
+  .field input,.field select{min-height:44px;}
+  .admin-nav-item{padding:12px;}
+  .modal-overlay{padding:24px 12px;}
+}
+@media(max-width:400px){
+  .modal-overlay{padding:12px 8px;}
+  .modal{padding:20px 18px;}
 }

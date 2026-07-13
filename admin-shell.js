@@ -281,6 +281,39 @@ window.AdminShell = (function () {
       await window.sb.auth.signOut();
       location.href = 'admin-login.html';
     });
+
+    mountMobileNav();
+  }
+
+  // A barra lateral já virava gaveta em telas ≤900px (admin.css), mas não
+  // existia nenhum botão em lugar nenhum pra abrir essa gaveta — ficava
+  // presa fora da tela. Injeta o botão dentro do topbar de qualquer página
+  // (sem precisar editar as 26 telas uma por uma) mais um fundo escurecido
+  // que fecha ao tocar fora.
+  function mountMobileNav() {
+    const topbar = document.querySelector('.admin-topbar');
+    const sidebar = document.getElementById('adminSidebar');
+    if (!topbar || !sidebar || document.getElementById('adminMobToggle')) return;
+
+    const toggle = document.createElement('button');
+    toggle.className = 'admin-mob-toggle';
+    toggle.id = 'adminMobToggle';
+    toggle.title = 'Abrir menu';
+    toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+    topbar.prepend(toggle);
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'admin-sidebar-backdrop';
+    backdrop.id = 'adminSidebarBackdrop';
+    document.body.appendChild(backdrop);
+
+    function closeNav() { sidebar.classList.remove('open'); backdrop.classList.remove('open'); }
+    function openNav() { sidebar.classList.add('open'); backdrop.classList.add('open'); }
+
+    toggle.addEventListener('click', () => {
+      if (sidebar.classList.contains('open')) closeNav(); else openNav();
+    });
+    backdrop.addEventListener('click', closeNav);
   }
 
   async function renderInsightBar() {

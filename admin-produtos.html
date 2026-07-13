@@ -15,6 +15,10 @@
 .checks-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-bottom:14px;}
 .field-section-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin:20px 0 10px;padding-top:14px;border-top:1px solid var(--border-color);}
 .field-section-title:first-child{margin-top:0;padding-top:0;border-top:none;}
+@media(max-width:560px){
+  .specs-row,.img-row,.checks-grid{grid-template-columns:1fr;}
+  .remove-row-btn{padding:10px 12px;justify-self:start;min-width:44px;}
+}
 </style>
 </head>
 <body>

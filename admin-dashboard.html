@@ -18,8 +18,8 @@
 /* O painel de notificações é pensado pra "subir" a partir de um sino
    flutuante lá embaixo (admin.css) — aqui o sino é lá em cima, então o
    painel precisa "descer" a partir dele em vez de flutuar no rodapé. */
-.notif-panel{top:56px;bottom:20px;right:20px !important;width:320px;max-height:none;}
-@media(max-width:480px){.notif-panel{right:12px;}}
+.notif-panel{top:56px;bottom:20px;right:20px !important;width:320px;max-width:calc(100vw - 24px);max-height:none;}
+@media(max-width:480px){.notif-panel{right:12px !important;}}
 
 /* ── util ── */
 .dash-content{padding:40px 40px 100px;max-width:1600px;margin:0 auto;}
@@ -90,7 +90,25 @@
 .dash-avatar{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--primary),var(--violet));color:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;flex-shrink:0;}
 .dash-profile-name{font-size:12px;font-weight:700;color:var(--text-main);line-height:1.3;}
 .dash-profile-role{font-size:10px;color:var(--text-muted);text-transform:capitalize;line-height:1.3;}
-@media(max-width:640px){.dash-profile-txt,.dash-daterange{display:none;}}
+@media(max-width:900px){
+  .dash-topbar-right{gap:8px;}
+  .period-tabs{order:1;}
+  .adr-wrap{order:2;}
+  .dash-icon-btn{order:3;}
+  .dash-quickbtn{order:4;padding:9px 12px !important;}
+  .dash-profile{order:5;}
+}
+@media(max-width:640px){
+  .dash-profile-txt{display:none;}
+  .dash-profile{padding:5px;}
+  .adr-select{max-width:120px;}
+  .dash-quickbtn span{display:none;}
+}
+@media(max-width:480px){
+  .period-tabs button{padding:6px 9px;font-size:10.5px;}
+  .dash-topbar-title{font-size:16px;}
+  .adr-select{max-width:90px;}
+}
 
 /* ═══ BANNER ═══ */
 .dash-banner{
@@ -108,7 +126,10 @@
 .dash-banner-btn:hover{filter:brightness(1.08);transform:translateY(-1px);}
 
 /* ═══ METRIC CARDS ═══ */
-.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(216px,1fr));gap:20px;margin-bottom:32px;}
+.mgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:20px;margin-bottom:32px;}
+@media(max-width:1439px){.mgrid{grid-template-columns:repeat(4,1fr);}}
+@media(max-width:1023px){.mgrid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:639px){.mgrid{grid-template-columns:1fr;gap:14px;}}
 .mcard{
   background:linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0) 45%), var(--bg-card);
   border:1px solid var(--border-soft);border-radius:16px;padding:20px 22px;
@@ -238,7 +259,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           <span class="dash-badge" id="dashBellBadge" data-notif-badge hidden>0</span>
         </button>
-        <a class="btn btn-primary dash-quickbtn" href="admin-produtos.html">+ Novo Produto</a>
+        <a class="btn btn-primary dash-quickbtn" href="admin-produtos.html">+ <span>Novo Produto</span></a>
         <div class="dash-profile" id="dashProfile">
           <div class="dash-avatar" id="dashAvatar">AD</div>
           <div class="dash-profile-txt">
