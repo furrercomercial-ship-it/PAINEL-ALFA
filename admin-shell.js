@@ -492,12 +492,39 @@ window.AdminShell = (function () {
   function mountNotifBell() {
     if (!can('notificacoes.visualizar')) return;
     if (document.getElementById('notifFab')) return;
-    const wrap = document.createElement('div');
-    wrap.innerHTML = `
-      <button class="notif-fab" id="notifFab" title="Notificações">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span class="notif-fab-badge" id="notifFabBadge" hidden>0</span>
-      </button>
+
+    // O sino mora dentro do topbar de toda página (mesmo lugar em todo
+    // lugar) em vez de flutuar solto lá embaixo — evita ficar duplicado
+    // do lado do balão de chat. Se a página não tiver uma área de ações
+    // no topbar ainda, cria uma.
+    const topbar = document.querySelector('.admin-topbar');
+    const bellBtn = document.createElement('button');
+    bellBtn.className = 'notif-fab';
+    bellBtn.id = 'notifFab';
+    bellBtn.title = 'Notificações';
+    bellBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-fab-badge" id="notifFabBadge" hidden>0</span>';
+
+    // Páginas podem marcar o lugar exato do sino com <span id="notifAnchor">
+    // (ex: Dashboard, onde ele fica entre a busca e o botão de criar); as
+    // demais recebem o sino no início do bloco de ações do topbar.
+    const anchor = document.getElementById('notifAnchor');
+    let actions = document.querySelector('.admin-topbar-actions');
+    if (anchor) {
+      anchor.classList.forEach(c => bellBtn.classList.add(c));
+      anchor.replaceWith(bellBtn);
+    } else if (topbar) {
+      if (!actions) {
+        actions = document.createElement('div');
+        actions.className = 'admin-topbar-actions';
+        topbar.appendChild(actions);
+      }
+      actions.prepend(bellBtn);
+    } else {
+      document.body.appendChild(bellBtn);
+    }
+
+    const panelWrap = document.createElement('div');
+    panelWrap.innerHTML = `
       <div class="notif-panel" id="notifPanel">
         <div class="notif-head">
           <div class="notif-head-title">Notificações</div>
@@ -514,10 +541,10 @@ window.AdminShell = (function () {
           <a href="admin-notificacoes.html" style="font-size:11.5px;color:var(--primary);font-weight:700;">Ver histórico completo →</a>
         </div>
       </div>`;
-    document.body.appendChild(wrap);
+    document.body.appendChild(panelWrap);
 
     const panel = document.getElementById('notifPanel');
-    document.getElementById('notifFab').addEventListener('click', () => toggleNotifications());
+    bellBtn.addEventListener('click', () => toggleNotifications());
     document.getElementById('notifClose').addEventListener('click', () => panel.classList.remove('open'));
 
     document.getElementById('notifTabs').addEventListener('click', e => {

@@ -12,14 +12,6 @@
 /* Paleta/gradiente já vivem em admin.css (compartilhado com o painel
    inteiro) — aqui só o que é específico desta tela. */
 #admin-insight-bar{display:none !important;}
-/* O sino já mora no topbar desta página (perto do banner de pedidos
-   pendentes) — não precisa do sino flutuante duplicado por cima. */
-.notif-fab{display:none !important;}
-/* O painel de notificações é pensado pra "subir" a partir de um sino
-   flutuante lá embaixo (admin.css) — aqui o sino é lá em cima, então o
-   painel precisa "descer" a partir dele em vez de flutuar no rodapé. */
-.notif-panel{top:56px;bottom:20px;right:20px !important;width:320px;max-width:calc(100vw - 24px);max-height:none;}
-@media(max-width:480px){.notif-panel{right:12px !important;}}
 
 /* ── util ── */
 .dash-content{padding:40px 40px 100px;max-width:1600px;margin:0 auto;}
@@ -255,10 +247,7 @@
           <input type="text" id="dashSearchInput" placeholder="Buscar produtos, pedidos, clientes..." autocomplete="off">
           <div class="dash-search-results" id="dashSearchResults"></div>
         </div>
-        <button class="dash-icon-btn" id="dashBellBtn" title="Notificações">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span class="dash-badge" id="dashBellBadge" data-notif-badge hidden>0</span>
-        </button>
+        <span id="notifAnchor" class="dash-icon-btn"></span>
         <a class="btn btn-primary dash-quickbtn" href="admin-produtos.html">+ <span>Novo Produto</span></a>
         <div class="dash-profile" id="dashProfile">
           <div class="dash-avatar" id="dashAvatar">AD</div>
@@ -796,10 +785,6 @@ document.getElementById('periodTabs').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn || !dateRangeCtl) return;
   dateRangeCtl.setKey(btn.dataset.key);
-});
-document.getElementById('dashBellBtn').addEventListener('click', () => {
-  if (window.AdminShell && AdminShell.toggleNotifications) AdminShell.toggleNotifications();
-  else location.href = 'admin-notificacoes.html';
 });
 
 (async function () {
