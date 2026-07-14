@@ -188,7 +188,7 @@ window.NotasFiscais = (function () {
 
   async function fetchOrderFull(orderId) {
     const { data: order, error } = await window.sb.from('orders')
-      .select('id,order_number,total,created_at,profiles(full_name,email,cpf)').eq('id', orderId).single();
+      .select('id,order_number,total,status,created_at,profiles(full_name,email,cpf)').eq('id', orderId).single();
     if (error || !order) return null;
     const { data: items } = await window.sb.from('order_items').select('product_name_snapshot,qty').eq('order_id', orderId);
     order.items = items || [];
@@ -209,16 +209,30 @@ window.NotasFiscais = (function () {
     style.id = 'nfStyles';
     style.textContent = `
       .nf-order-search{position:relative;}
-      .nf-order-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);max-height:220px;overflow-y:auto;z-index:20;display:none;}
+      .nf-order-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);max-height:280px;overflow-y:auto;z-index:20;display:none;}
       .nf-order-results.open{display:block;}
-      .nf-order-item{padding:9px 13px;cursor:pointer;font-size:12.5px;color:var(--text-secondary);border-bottom:1px solid var(--border-color);}
+      .nf-order-item{display:flex;align-items:center;gap:10px;padding:10px 13px;cursor:pointer;border-bottom:1px solid var(--border-color);}
       .nf-order-item:last-child{border-bottom:none;}
-      .nf-order-item:hover{background:var(--bg-card-2);color:var(--text-main);}
-      .nf-order-item b{color:var(--text-main);}
+      .nf-order-item:hover{background:var(--bg-card-2);}
+      .nf-order-item-main{flex:1;min-width:0;}
+      .nf-order-item-num{font-size:13px;font-weight:800;color:var(--text-main);}
+      .nf-order-item-cli{font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .nf-order-item-doc{font-size:11px;color:var(--text-muted);margin-top:1px;}
+      .nf-order-item-side{text-align:right;flex-shrink:0;}
+      .nf-order-item-val{font-size:12.5px;font-weight:700;color:var(--text-main);}
+      .nf-order-item-date{font-size:10.5px;color:var(--text-muted);margin-top:2px;}
+      .nf-order-empty{padding:16px 13px;font-size:12.5px;color:var(--text-muted);text-align:center;}
       .nf-locked-order{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;color:var(--text-main);}
-      .nf-ref-box{background:rgba(128,128,128,.06);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:12px 14px;font-size:12px;color:var(--text-secondary);}
-      .nf-ref-box div{margin-bottom:3px;}
-      .nf-ref-box div:last-child{margin-bottom:0;}
+
+      .nf-ref-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden;margin-top:12px;}
+      .nf-ref-card-head{background:rgba(37,99,235,.08);padding:10px 16px;font-size:12.5px;font-weight:800;color:var(--primary);display:flex;align-items:center;justify-content:space-between;}
+      .nf-ref-card-body{padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;}
+      .nf-ref-item{min-width:0;}
+      .nf-ref-item.span2{grid-column:1/-1;}
+      .nf-ref-lbl{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:3px;}
+      .nf-ref-val{font-size:13px;color:var(--text-main);font-weight:600;overflow-wrap:anywhere;}
+      @media(max-width:480px){.nf-ref-card-body{grid-template-columns:1fr;}}
+
       .nf-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 18px;margin-bottom:16px;}
       .nf-detail-grid .dl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:10px;}
       .nf-detail-grid .dv{font-size:13.5px;color:var(--text-main);font-weight:600;}
@@ -227,66 +241,178 @@ window.NotasFiscais = (function () {
       .nf-empty-box svg{color:var(--text-muted);margin-bottom:8px;}
       .nf-empty-box p{font-size:12.5px;color:var(--text-muted);margin-bottom:14px;}
       @media(max-width:480px){.nf-detail-grid{grid-template-columns:1fr;}}
+
+      /* ═══ formulário: seções, legenda, campos ═══ */
+      .nf-required-note{font-size:11.5px;color:var(--text-muted);margin:-4px 0 16px;}
+      .nf-req{color:var(--danger);margin-left:2px;}
+      .nf-section{margin-bottom:26px;}
+      .nf-section:last-child{margin-bottom:0;}
+      .nf-section-title{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-main);padding-bottom:8px;margin-bottom:16px;border-bottom:1px solid var(--border-color);}
+
+      /* ═══ chave de acesso: estados ═══ */
+      .nf-chave-wrap{position:relative;}
+      .nf-chave-wrap input{padding-right:38px;font-family:monospace;letter-spacing:.02em;}
+      .nf-chave-check{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--success);display:none;}
+      #nf_chave.nf-state-incomplete{border-color:var(--warning);}
+      #nf_chave.nf-state-valid{border-color:var(--success);}
+      #nf_chave.nf-state-valid ~ .nf-chave-check{display:block;}
+      #nf_chave.nf-state-invalid{border-color:var(--danger);}
+      #nfChaveHint.nf-hint-error{color:var(--danger);font-weight:600;}
+
+      /* ═══ valor monetário ═══ */
+      #nf_valor{font-variant-numeric:tabular-nums;font-weight:700;}
+
+      /* ═══ datas ═══ */
+      input[type="date"]{color-scheme:light;}
+      :root[data-theme="dark"] input[type="date"]{color-scheme:dark;}
+
+      /* ═══ upload em cards ═══ */
+      .nf-upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+      @media(max-width:560px){.nf-upload-grid{grid-template-columns:1fr;}}
+      .nf-upload-card{position:relative;border:1.5px dashed var(--border-color);border-radius:var(--radius-lg);background:var(--bg-main);transition:border-color .15s var(--ease),background .15s var(--ease);}
+      .nf-upload-card.nf-upload-dragging{border-color:var(--primary);background:var(--primary-soft);}
+      .nf-upload-card.nf-upload-error-state{border-color:var(--danger);border-style:solid;}
+      .nf-upload-empty{text-align:center;padding:22px 16px;}
+      .nf-upload-empty svg{color:var(--text-muted);margin-bottom:8px;}
+      .nf-upload-label{font-size:13px;font-weight:700;color:var(--text-main);margin-bottom:4px;}
+      .nf-upload-drop-hint{font-size:12px;color:var(--text-secondary);margin-bottom:4px;}
+      .nf-upload-or{font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+      .nf-upload-filled{display:flex;align-items:center;gap:10px;padding:16px;}
+      .nf-upload-ok-ic{color:var(--success);flex-shrink:0;background:var(--success-soft);border-radius:50%;padding:6px;width:32px;height:32px;box-sizing:border-box;}
+      .nf-upload-file-info{flex:1;min-width:0;}
+      .nf-upload-file-name{font-size:12.5px;font-weight:700;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .nf-upload-file-size{font-size:11px;color:var(--text-muted);margin-top:2px;}
+      .nf-upload-file-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+      .nf-upload-error{font-size:11.5px;color:var(--danger);font-weight:600;padding:0 16px 14px;}
+
+      /* ═══ wizard mobile ═══ */
+      .nf-step-progress{display:none;}
+      .nf-wizard .nf-step-progress{display:block;padding:0 0 16px;}
+      .nf-step-progress-txt{font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;}
+      .nf-step-dots{display:flex;gap:5px;}
+      .nf-step-dot{height:4px;flex:1;border-radius:2px;background:var(--border-color);}
+      .nf-step-dot.active{background:var(--primary);}
+      .nf-step-dot.done{background:var(--success);}
+      .nf-wizard .nf-section.nf-step-hidden{display:none;}
+      .nf-modal-foot{justify-content:space-between;}
+      .nf-modal-foot-right{display:flex;gap:10px;justify-content:flex-end;flex:1;}
+      .nf-form-modal.nf-saving .nf-section{opacity:.6;pointer-events:none;}
     `;
     document.head.appendChild(style);
   }
 
   // ── modal: formulário (criar / editar metadados) ────────────────────────
+  const STEP_TITLES = ['Pedido', 'Dados da Nota Fiscal', 'Arquivos', 'Informações do Emitente', 'Informações Complementares'];
+  const STEP_MEDIA = '(max-width:640px)';
+  let _step = 1;
+
+  function uploadCardHtml(kind, label, hint) {
+    return `
+      <div class="nf-upload-card" id="nfCard_${kind}" data-kind="${kind}">
+        <input type="file" id="nf_${kind}" hidden>
+        <div class="nf-upload-empty">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div class="nf-upload-label">${label} <span class="nf-req">*</span></div>
+          <div class="nf-upload-drop-hint">Arraste o arquivo aqui</div>
+          <div class="nf-upload-or">ou</div>
+          <button type="button" class="btn btn-secondary btn-sm nf-upload-pick">Selecionar arquivo</button>
+        </div>
+        <div class="nf-upload-filled" style="display:none;">
+          <svg class="nf-upload-ok-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <div class="nf-upload-file-info">
+            <div class="nf-upload-file-name"></div>
+            <div class="nf-upload-file-size"></div>
+          </div>
+          <div class="nf-upload-file-actions">
+            <button type="button" class="btn btn-secondary btn-sm nf-upload-change">Trocar arquivo</button>
+            <button type="button" class="btn btn-secondary btn-sm nf-upload-remove">Remover</button>
+          </div>
+        </div>
+        <div class="nf-upload-error" style="display:none;"></div>
+        <div class="field-hint" style="padding:0 16px 12px;">${hint}</div>
+      </div>`;
+  }
+
   function ensureFormModal() {
     if (document.getElementById('nfFormModal')) return;
     const wrap = document.createElement('div');
     wrap.innerHTML = `
       <div class="modal-overlay" id="nfFormModal">
-        <div class="modal" style="max-width:640px;">
+        <div class="modal nf-form-modal" style="max-width:700px;">
           <div class="modal-head"><div class="modal-title" id="nfFormTitle">Adicionar NF-e</div><button class="modal-close" id="nfFormClose">✕</button></div>
           <div id="nfFormBody">
-            <div class="field" id="nfOrderPickWrap">
-              <label>Pedido vinculado *</label>
-              <div class="nf-order-search">
-                <input type="search" id="nf_order_search" placeholder="Buscar por número do pedido...">
-                <div class="nf-order-results" id="nfOrderResults"></div>
+            <div class="nf-step-progress" id="nfStepProgress"></div>
+            <div class="nf-required-note">* Campos obrigatórios</div>
+
+            <div class="nf-section" data-step="1">
+              <div class="nf-section-title">Pedido</div>
+              <div class="field" id="nfOrderPickWrap">
+                <label>Pedido vinculado <span class="nf-req">*</span></label>
+                <div class="nf-order-search">
+                  <input type="search" id="nf_order_search" placeholder="Buscar por número do pedido, cliente ou CPF/CNPJ...">
+                  <div class="nf-order-results" id="nfOrderResults"></div>
+                </div>
               </div>
-            </div>
-            <div class="field" id="nfOrderLocked" style="display:none;">
-              <label>Pedido vinculado</label>
-              <div class="nf-locked-order" id="nfOrderLockedTxt"></div>
-            </div>
-            <div class="field" id="nfOrderRef" style="display:none;">
-              <label>Conferência do pedido</label>
-              <div class="nf-ref-box" id="nfOrderRefBox"></div>
+              <div class="field" id="nfOrderLocked" style="display:none;">
+                <label>Pedido vinculado</label>
+                <div class="nf-locked-order" id="nfOrderLockedTxt"></div>
+              </div>
+              <div id="nfOrderRef" style="display:none;"></div>
             </div>
 
-            <div class="field-row">
-              <div class="field"><label>Número da NF-e *</label><input id="nf_numero"></div>
-              <div class="field"><label>Série *</label><input id="nf_serie"></div>
+            <div class="nf-section" data-step="2">
+              <div class="nf-section-title">Dados da Nota Fiscal</div>
+              <div class="field-row">
+                <div class="field"><label>Número da NF-e <span class="nf-req">*</span></label><input id="nf_numero"></div>
+                <div class="field"><label>Série <span class="nf-req">*</span></label><input id="nf_serie"></div>
+              </div>
+              <div class="field">
+                <label>Chave de acesso <span class="nf-req">*</span></label>
+                <div class="nf-chave-wrap">
+                  <input id="nf_chave" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000">
+                  <svg class="nf-chave-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="field-hint" id="nfChaveHint">44 números — pontos, espaços e traços são removidos automaticamente.</div>
+              </div>
+              <div class="field-row">
+                <div class="field"><label>Data de emissão <span class="nf-req">*</span></label><input type="date" id="nf_emissao"></div>
+                <div class="field"><label>Valor total <span class="nf-req">*</span></label><input type="text" inputmode="decimal" id="nf_valor" placeholder="R$ 0,00"></div>
+              </div>
             </div>
-            <div class="field">
-              <label>Chave de acesso *</label>
-              <input id="nf_chave" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000">
-              <div class="field-hint">44 números — pontos, espaços e traços são removidos automaticamente.</div>
+
+            <div class="nf-section" data-step="3">
+              <div class="nf-section-title">Arquivos</div>
+              <div class="nf-upload-grid" id="nfFileRow">
+                ${uploadCardHtml('xml', 'XML da NF-e', 'Até 5 MB.')}
+                ${uploadCardHtml('pdf', 'PDF/DANFE', 'Até 15 MB.')}
+              </div>
             </div>
-            <div class="field-row">
-              <div class="field"><label>Data de emissão *</label><input type="date" id="nf_emissao"></div>
-              <div class="field"><label>Valor total (R$) *</label><input type="number" step="0.01" min="0" id="nf_valor"></div>
+
+            <div class="nf-section" data-step="4">
+              <div class="nf-section-title">Informações do Emitente</div>
+              <div class="field-row">
+                <div class="field"><label>Protocolo de autorização</label><input id="nf_protocolo"></div>
+                <div class="field"><label>CNPJ do emitente</label><input id="nf_emit_doc"></div>
+              </div>
+              <div class="field"><label>Nome/razão social do emitente</label><input id="nf_emit_nome"></div>
             </div>
-            <div class="field-row" id="nfFileRow">
-              <div class="field"><label>Arquivo XML *</label><input type="file" accept=".xml,text/xml,application/xml" id="nf_xml"><div class="field-hint">Até 5 MB.</div></div>
-              <div class="field"><label>Arquivo PDF/DANFE *</label><input type="file" accept=".pdf,application/pdf" id="nf_pdf"><div class="field-hint">Até 15 MB.</div></div>
+
+            <div class="nf-section" data-step="5">
+              <div class="nf-section-title">Informações Complementares</div>
+              <div class="field-row">
+                <div class="field"><label>Data de saída</label><input type="date" id="nf_saida"></div>
+                <div class="field"><label>Natureza da operação</label><input id="nf_natureza" placeholder="Venda de mercadoria"></div>
+              </div>
+              <div class="field"><label>Observações</label><textarea id="nf_obs" rows="2"></textarea></div>
             </div>
-            <div class="field-row">
-              <div class="field"><label>Data de saída</label><input type="date" id="nf_saida"></div>
-              <div class="field"><label>Natureza da operação</label><input id="nf_natureza" placeholder="Venda de mercadoria"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Protocolo de autorização</label><input id="nf_protocolo"></div>
-              <div class="field"><label>CNPJ do emitente</label><input id="nf_emit_doc"></div>
-            </div>
-            <div class="field"><label>Nome/razão social do emitente</label><input id="nf_emit_nome"></div>
-            <div class="field"><label>Observações</label><textarea id="nf_obs" rows="2"></textarea></div>
           </div>
-          <div class="modal-foot">
-            <button class="btn btn-secondary" id="nfFormCancel">Cancelar</button>
-            <button class="btn btn-primary" id="nfFormSave">Salvar</button>
+          <div class="modal-foot nf-modal-foot">
+            <button class="btn btn-secondary" id="nfStepBack" style="display:none;">← Voltar</button>
+            <div class="nf-modal-foot-right">
+              <button class="btn btn-secondary" id="nfFormCancel">Cancelar</button>
+              <button class="btn btn-secondary" id="nfStepNext" style="display:none;">Próximo →</button>
+              <button class="btn btn-primary" id="nfFormSave">Adicionar NF-e</button>
+            </div>
           </div>
         </div>
       </div>`;
@@ -298,13 +424,46 @@ window.NotasFiscais = (function () {
       e.target.value = fmtChave(e.target.value);
       const after = e.target.value.length;
       e.target.selectionStart = e.target.selectionEnd = Math.max(0, pos + (after - before));
+      updateChaveState();
     });
+
+    document.getElementById('nf_valor').addEventListener('input', (e) => {
+      const pos = e.target.selectionStart;
+      const before = e.target.value.length;
+      e.target.value = maskMoneyValue(e.target.value);
+      const after = e.target.value.length;
+      e.target.selectionStart = e.target.selectionEnd = Math.max(0, pos + (after - before));
+    });
+    document.getElementById('nf_valor').addEventListener('focus', (e) => {
+      if (!e.target.value) e.target.value = fmtMoneyInput(0);
+    });
+
+    _xmlCardCtl = wireUploadCard('xml', validateXmlFile);
+    _pdfCardCtl = wireUploadCard('pdf', validatePdfFile);
 
     document.getElementById('nfFormClose').addEventListener('click', closeFormModal);
     document.getElementById('nfFormCancel').addEventListener('click', closeFormModal);
+
+    document.getElementById('nfStepNext').addEventListener('click', () => {
+      if (_step === 1 && !_formCtx.orderId) { AdminShell.toast('Selecione o pedido vinculado.', 'error'); return; }
+      let next = _step + 1;
+      if (_formCtx && _formCtx.invoice && next === 3) next += 1; // edição não tem etapa de arquivos
+      goToStep(next);
+    });
+    document.getElementById('nfStepBack').addEventListener('click', () => {
+      let prev = _step - 1;
+      if (_formCtx && _formCtx.invoice && prev === 3) prev -= 1;
+      goToStep(prev);
+    });
+
+    window.matchMedia(STEP_MEDIA).addEventListener('change', () => {
+      if (document.getElementById('nfFormModal').classList.contains('open')) renderStepUI();
+    });
   }
 
   let _formCtx = null; // { orderId, order, invoice, onSaved, onClosed }
+  let _xmlCardCtl = null;
+  let _pdfCardCtl = null;
 
   function closeFormModal() {
     document.getElementById('nfFormModal').classList.remove('open');
@@ -312,30 +471,194 @@ window.NotasFiscais = (function () {
     _formCtx = null;
   }
 
+  // ── chave de acesso: feedback visual (âmbar incompleta / verde válida / vermelho erro) ──
+  function updateChaveState(forceError) {
+    const input = document.getElementById('nf_chave');
+    const hint = document.getElementById('nfChaveHint');
+    input.classList.remove('nf-state-incomplete', 'nf-state-valid', 'nf-state-invalid');
+    hint.classList.remove('nf-hint-error');
+    if (forceError) {
+      input.classList.add('nf-state-invalid');
+      hint.textContent = forceError;
+      hint.classList.add('nf-hint-error');
+      return;
+    }
+    const digits = onlyDigits(input.value);
+    if (!digits.length) {
+      hint.textContent = '44 números — pontos, espaços e traços são removidos automaticamente.';
+      return;
+    }
+    if (digits.length < 44) {
+      input.classList.add('nf-state-incomplete');
+      hint.textContent = digits.length + ' de 44 números.';
+    } else {
+      input.classList.add('nf-state-valid');
+      hint.textContent = 'Chave de acesso válida.';
+    }
+  }
+
+  // ── valor monetário: mascara como o usuário já vê em ERPs (dígitos = centavos) ──
+  function fmtMoneyInput(v) {
+    return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function parseMoneyInput(str) {
+    const digits = (str || '').replace(/\D/g, '');
+    return digits ? Number(digits) / 100 : 0;
+  }
+  function maskMoneyValue(str) {
+    const digits = (str || '').replace(/\D/g, '').slice(0, 13);
+    return fmtMoneyInput(digits ? Number(digits) / 100 : 0);
+  }
+
+  // ── cards de upload: input[type=file] oculto continua sendo a fonte da verdade
+  // (handleFormSave lê document.getElementById('nf_xml').files[0] sem mudar nada) ──
+  function wireUploadCard(kind, validateFn) {
+    const card = document.getElementById('nfCard_' + kind);
+    const input = document.getElementById('nf_' + kind);
+    const empty = card.querySelector('.nf-upload-empty');
+    const filled = card.querySelector('.nf-upload-filled');
+    const errBox = card.querySelector('.nf-upload-error');
+    const nameEl = card.querySelector('.nf-upload-file-name');
+    const sizeEl = card.querySelector('.nf-upload-file-size');
+
+    function showEmpty() {
+      errBox.textContent = ''; errBox.style.display = 'none'; card.classList.remove('nf-upload-error-state');
+      empty.style.display = ''; filled.style.display = 'none';
+    }
+    function showFile(file) {
+      errBox.textContent = ''; errBox.style.display = 'none'; card.classList.remove('nf-upload-error-state');
+      nameEl.textContent = file.name;
+      sizeEl.textContent = fmtBytes(file.size);
+      empty.style.display = 'none'; filled.style.display = '';
+    }
+    function showError(msg) {
+      errBox.textContent = msg; errBox.style.display = ''; card.classList.add('nf-upload-error-state');
+      empty.style.display = ''; filled.style.display = 'none';
+    }
+    function assignFile(file) {
+      if (!file) { showEmpty(); return; }
+      const err = validateFn(file);
+      if (err) { showError(err); input.value = ''; return; }
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      showFile(file);
+    }
+
+    card.querySelector('.nf-upload-pick').addEventListener('click', () => input.click());
+    card.querySelector('.nf-upload-change').addEventListener('click', () => input.click());
+    card.querySelector('.nf-upload-remove').addEventListener('click', () => { input.value = ''; showEmpty(); });
+    input.addEventListener('change', () => assignFile(input.files[0]));
+
+    ['dragenter', 'dragover'].forEach(ev => card.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); card.classList.add('nf-upload-dragging'); }));
+    ['dragleave', 'dragend'].forEach(ev => card.addEventListener(ev, (e) => { e.preventDefault(); card.classList.remove('nf-upload-dragging'); }));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      card.classList.remove('nf-upload-dragging');
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) assignFile(file);
+    });
+
+    return { reset: showEmpty };
+  }
+
+  // ── wizard mobile: mesmos campos, só a visibilidade por etapa muda ──
+  function isMobileStep() { return window.matchMedia(STEP_MEDIA).matches; }
+
+  function renderStepUI() {
+    const modal = document.getElementById('nfFormModal');
+    const mobile = isMobileStep();
+    modal.classList.toggle('nf-wizard', mobile);
+    if (!mobile) {
+      document.querySelectorAll('.nf-section').forEach(s => s.classList.remove('nf-step-hidden'));
+      document.getElementById('nfStepBack').style.display = 'none';
+      document.getElementById('nfStepNext').style.display = 'none';
+      document.getElementById('nfFormSave').style.display = '';
+      return;
+    }
+    document.querySelectorAll('.nf-section').forEach(s => {
+      s.classList.toggle('nf-step-hidden', Number(s.dataset.step) !== _step);
+    });
+    document.getElementById('nfStepProgress').innerHTML =
+      `<div class="nf-step-progress-txt">Etapa ${_step} de 5 — ${STEP_TITLES[_step - 1]}</div>
+       <div class="nf-step-dots">${STEP_TITLES.map((t, i) => `<span class="nf-step-dot ${i + 1 === _step ? 'active' : ''} ${i + 1 < _step ? 'done' : ''}"></span>`).join('')}</div>`;
+    document.getElementById('nfStepBack').style.display = _step > 1 ? '' : 'none';
+    document.getElementById('nfStepNext').style.display = _step < 5 ? '' : 'none';
+    document.getElementById('nfFormSave').style.display = _step === 5 ? '' : 'none';
+  }
+
+  function goToStep(n) {
+    _step = Math.min(5, Math.max(1, n));
+    renderStepUI();
+    const body = document.getElementById('nfFormBody');
+    if (body) body.scrollTop = 0;
+  }
+
+  const ORDER_STATUS_LABELS = { aguardando_pagamento: 'Aguardando Pagamento', pago: 'Pago', preparando: 'Em Preparação', enviado: 'Em Transporte', entregue: 'Entregue', cancelado: 'Cancelado' };
+  const ORDER_STATUS_COLORS = { aguardando_pagamento: 'amber', pago: 'blue', preparando: 'blue', enviado: 'blue', entregue: 'green', cancelado: 'red' };
+
   function renderOrderRef(order) {
-    const box = document.getElementById('nfOrderRefBox');
+    const wrap = document.getElementById('nfOrderRef');
     const produtos = (order.items || []).map(i => i.qty + 'x ' + i.product_name_snapshot).join(', ') || '—';
-    box.innerHTML = `
-      <div><b>Pedido:</b> #${order.order_number || order.id}</div>
-      <div><b>Cliente:</b> ${order.profiles ? order.profiles.full_name : 'Visitante'}</div>
-      <div><b>CPF/CNPJ:</b> ${(order.profiles && order.profiles.cpf) || '—'}</div>
-      <div><b>E-mail:</b> ${(order.profiles && order.profiles.email) || '—'}</div>
-      <div><b>Valor do pedido:</b> ${fmtBRL(order.total)}</div>
-      <div><b>Produtos:</b> ${produtos}</div>`;
-    document.getElementById('nfOrderRef').style.display = '';
+    const statusLabel = order.status ? (ORDER_STATUS_LABELS[order.status] || order.status) : null;
+    const statusColor = order.status ? (ORDER_STATUS_COLORS[order.status] || 'gray') : 'gray';
+    wrap.innerHTML = `
+      <div class="nf-ref-card">
+        <div class="nf-ref-card-head">
+          <span>Pedido #${order.order_number || order.id}</span>
+          ${statusLabel ? `<span class="status-pill ${statusColor}">${statusLabel}</span>` : ''}
+        </div>
+        <div class="nf-ref-card-body">
+          <div class="nf-ref-item"><div class="nf-ref-lbl">Cliente</div><div class="nf-ref-val">${order.profiles ? order.profiles.full_name : 'Visitante'}</div></div>
+          <div class="nf-ref-item"><div class="nf-ref-lbl">CPF/CNPJ</div><div class="nf-ref-val">${(order.profiles && order.profiles.cpf) || '—'}</div></div>
+          <div class="nf-ref-item span2"><div class="nf-ref-lbl">Produtos</div><div class="nf-ref-val">${produtos}</div></div>
+          <div class="nf-ref-item"><div class="nf-ref-lbl">Valor</div><div class="nf-ref-val">${fmtBRL(order.total)}</div></div>
+          <div class="nf-ref-item"><div class="nf-ref-lbl">Data</div><div class="nf-ref-val">${order.created_at ? fmtDate(order.created_at.slice(0, 10)) : '—'}</div></div>
+        </div>
+      </div>`;
+    wrap.style.display = '';
   }
 
   function applyOrderToForm(order) {
     _formCtx.order = order;
     _formCtx.orderId = order.id;
     renderOrderRef(order);
+    AdminShell.toast('Pedido localizado.', 'success');
   }
 
   async function pickOrder(order) {
     document.getElementById('nfOrderResults').classList.remove('open');
-    document.getElementById('nf_order_search').value = '#' + (order.order_number || order.id);
+    document.getElementById('nf_order_search').value = '#' + (order.order_number || order.id) + (order.profiles ? ' — ' + order.profiles.full_name : '');
     const full = await fetchOrderFull(order.id);
     if (full) applyOrderToForm(full);
+  }
+
+  // Busca sem alterar o banco: número do pedido (ilike direto) + nome/CPF do
+  // cliente (busca em profiles, depois os pedidos desses clientes) — evita o
+  // filtro de recurso aninhado do PostgREST (profiles.full_name.ilike via
+  // !inner), que excluiria pedidos de visitante sem conta dos resultados.
+  async function searchOrders(term) {
+    const clean = term.trim();
+    const numTerm = clean.replace(/^#/, '');
+    const digits = clean.replace(/\D/g, '');
+    const cols = 'id,order_number,total,status,created_at,profiles(full_name,cpf)';
+    const [byNumber, byProfile] = await Promise.all([
+      window.sb.from('orders').select(cols)
+        .ilike('order_number', '%' + numTerm + '%').order('created_at', { ascending: false }).limit(8),
+      window.sb.from('profiles').select('id')
+        .or(`full_name.ilike.%${clean}%,cpf.ilike.%${digits || clean}%`).limit(8),
+    ]);
+    const results = new Map();
+    (byNumber.data || []).forEach(o => results.set(o.id, o));
+    const profileIds = (byProfile.data || []).map(p => p.id);
+    if (profileIds.length) {
+      const { data: byUser } = await window.sb.from('orders').select(cols)
+        .in('user_id', profileIds).order('created_at', { ascending: false }).limit(8);
+      (byUser || []).forEach(o => results.set(o.id, o));
+    }
+    return Array.from(results.values())
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 8);
   }
 
   function wireOrderSearch() {
@@ -347,14 +670,24 @@ window.NotasFiscais = (function () {
       const term = input.value.trim();
       if (!term) { results.classList.remove('open'); return; }
       timer = setTimeout(async () => {
-        const { data } = await window.sb.from('orders')
-          .select('id,order_number,total,profiles(full_name)')
-          .ilike('order_number', '%' + term.replace(/^#/, '') + '%')
-          .order('created_at', { ascending: false }).limit(8);
-        const list = data || [];
+        const list = await searchOrders(term);
         results.innerHTML = list.length
-          ? list.map(o => `<div class="nf-order-item" data-id="${o.id}"><b>#${o.order_number || o.id}</b> — ${o.profiles ? o.profiles.full_name : 'Visitante'} — ${fmtBRL(o.total)}</div>`).join('')
-          : '<div class="nf-order-item">Nenhum pedido encontrado.</div>';
+          ? list.map(o => {
+              const statusLabel = ORDER_STATUS_LABELS[o.status] || o.status;
+              const statusColor = ORDER_STATUS_COLORS[o.status] || 'gray';
+              return `<div class="nf-order-item" data-id="${o.id}">
+                <div class="nf-order-item-main">
+                  <div class="nf-order-item-num">#${o.order_number || o.id} <span class="status-pill ${statusColor}" style="font-size:9px;">${statusLabel}</span></div>
+                  <div class="nf-order-item-cli">${o.profiles ? o.profiles.full_name : 'Visitante'}</div>
+                  <div class="nf-order-item-doc">${(o.profiles && o.profiles.cpf) || '—'}</div>
+                </div>
+                <div class="nf-order-item-side">
+                  <div class="nf-order-item-val">${fmtBRL(o.total)}</div>
+                  <div class="nf-order-item-date">${o.created_at ? fmtDate(o.created_at.slice(0, 10)) : ''}</div>
+                </div>
+              </div>`;
+            }).join('')
+          : '<div class="nf-order-empty">Nenhum pedido encontrado.</div>';
         results.classList.add('open');
         results.querySelectorAll('.nf-order-item[data-id]').forEach(el => {
           el.addEventListener('click', () => { const o = list.find(x => String(x.id) === el.dataset.id); if (o) pickOrder(o); });
@@ -367,8 +700,9 @@ window.NotasFiscais = (function () {
     document.getElementById('nf_numero').value = invoice.numero_nfe || '';
     document.getElementById('nf_serie').value = invoice.serie || '';
     document.getElementById('nf_chave').value = fmtChave(invoice.chave_acesso || '');
+    updateChaveState();
     document.getElementById('nf_emissao').value = invoice.data_emissao || '';
-    document.getElementById('nf_valor').value = invoice.valor_total || '';
+    document.getElementById('nf_valor').value = invoice.valor_total ? fmtMoneyInput(invoice.valor_total) : '';
     document.getElementById('nf_saida').value = invoice.data_saida || '';
     document.getElementById('nf_natureza').value = invoice.natureza_operacao || '';
     document.getElementById('nf_protocolo').value = invoice.protocolo_autorizacao || '';
@@ -382,6 +716,9 @@ window.NotasFiscais = (function () {
       .forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('nf_xml').value = '';
     document.getElementById('nf_pdf').value = '';
+    if (_xmlCardCtl) _xmlCardCtl.reset();
+    if (_pdfCardCtl) _pdfCardCtl.reset();
+    updateChaveState();
   }
 
   function openFormModal(opts) {
@@ -390,17 +727,32 @@ window.NotasFiscais = (function () {
     _formCtx = { orderId: opts.orderId || (opts.order && opts.order.id) || null, order: opts.order || null, invoice: opts.invoice || null, onSaved: opts.onSaved, onClosed: opts.onClosed };
 
     clearFormFields();
-    document.getElementById('nfFormTitle').textContent = _formCtx.invoice ? 'Editar Nota Fiscal' : 'Adicionar NF-e';
-    document.getElementById('nfFileRow').style.display = _formCtx.invoice ? 'none' : '';
-    document.getElementById('nf_xml').required = !_formCtx.invoice;
-    document.getElementById('nf_pdf').required = !_formCtx.invoice;
+    const isEdit = !!_formCtx.invoice;
+    document.getElementById('nfFormTitle').textContent = isEdit ? 'Editar Nota Fiscal' : 'Adicionar NF-e';
+    document.getElementById('nfFormSave').textContent = isEdit ? 'Salvar alterações' : 'Adicionar NF-e';
+    document.querySelector('.nf-section[data-step="3"]').style.display = isEdit ? 'none' : '';
+    document.getElementById('nf_xml').required = !isEdit;
+    document.getElementById('nf_pdf').required = !isEdit;
 
     const hasLockedOrder = !!(_formCtx.orderId);
     document.getElementById('nfOrderPickWrap').style.display = hasLockedOrder ? 'none' : '';
     document.getElementById('nfOrderLocked').style.display = hasLockedOrder ? '' : 'none';
     document.getElementById('nfOrderRef').style.display = 'none';
 
-    if (_formCtx.invoice) fillFormFields(_formCtx.invoice);
+    if (isEdit) {
+      fillFormFields(_formCtx.invoice);
+    } else {
+      // Não existe cadastro de "dados da empresa" no projeto — pra reduzir
+      // digitação, lembra o último emitente usado com sucesso (só no modo
+      // criar, só pré-preenche o que ficar vazio).
+      try {
+        const cached = JSON.parse(localStorage.getItem('alfa_nf_emitente') || 'null');
+        if (cached) {
+          document.getElementById('nf_emit_nome').value = cached.nome || '';
+          document.getElementById('nf_emit_doc').value = cached.doc || '';
+        }
+      } catch (e) { /* localStorage indisponível/corrompido — segue sem pré-preencher */ }
+    }
 
     if (hasLockedOrder) {
       const showOrder = (order) => {
@@ -417,16 +769,28 @@ window.NotasFiscais = (function () {
       wireOrderSearch();
     }
 
+    _step = 1;
+    renderStepUI();
+
     document.getElementById('nfFormModal').classList.add('open');
 
     document.getElementById('nfFormSave').onclick = () => handleFormSave();
+  }
+
+  function setFormDisabled(disabled) {
+    document.querySelectorAll('#nfFormModal input, #nfFormModal select, #nfFormModal textarea, #nfFormModal button')
+      .forEach(el => { el.disabled = disabled; });
   }
 
   async function handleFormSave() {
     const saveBtn = document.getElementById('nfFormSave');
     if (saveBtn.disabled) return;
 
-    if (!_formCtx.orderId) { AdminShell.toast('Selecione o pedido vinculado.', 'error'); return; }
+    if (!_formCtx.orderId) {
+      AdminShell.toast('Selecione o pedido vinculado.', 'error');
+      if (isMobileStep()) goToStep(1);
+      return;
+    }
 
     const payload = {
       pedido_id: _formCtx.orderId,
@@ -434,7 +798,7 @@ window.NotasFiscais = (function () {
       serie: document.getElementById('nf_serie').value.trim(),
       chave_acesso: document.getElementById('nf_chave').value,
       data_emissao: document.getElementById('nf_emissao').value,
-      valor_total: Number(document.getElementById('nf_valor').value || 0),
+      valor_total: parseMoneyInput(document.getElementById('nf_valor').value),
       data_saida: document.getElementById('nf_saida').value || null,
       natureza_operacao: document.getElementById('nf_natureza').value.trim() || null,
       protocolo_autorizacao: document.getElementById('nf_protocolo').value.trim() || null,
@@ -444,14 +808,21 @@ window.NotasFiscais = (function () {
     };
 
     if (!payload.numero_nfe || !payload.serie || !payload.data_emissao || !payload.valor_total) {
-      AdminShell.toast('Preencha todos os campos obrigatórios.', 'error'); return;
+      AdminShell.toast('Preencha todos os campos obrigatórios.', 'error');
+      if (isMobileStep()) goToStep(2);
+      return;
     }
 
     // normaliza aqui (não só dentro de createInvoice) porque o modo "editar
     // informações" também passa por este payload, e o campo na tela sempre
     // mostra a chave formatada com espaços.
     const chave = validateChave(payload.chave_acesso);
-    if (!chave.valid) { AdminShell.toast(chave.error, 'error'); return; }
+    if (!chave.valid) {
+      AdminShell.toast(chave.error, 'error');
+      updateChaveState(chave.error);
+      if (isMobileStep()) goToStep(2);
+      return;
+    }
     payload.chave_acesso = chave.digits;
 
     // cliente_nome/cliente_documento são um retrato do pedido no momento do
@@ -463,13 +834,16 @@ window.NotasFiscais = (function () {
       payload.cliente_documento = order.profiles ? order.profiles.cpf : null;
     }
 
+    const isEdit = !!_formCtx.invoice;
     saveBtn.disabled = true;
     const originalTxt = saveBtn.textContent;
-    saveBtn.textContent = 'Salvando...';
+    saveBtn.textContent = isEdit ? 'Salvando...' : 'Enviando arquivos e salvando...';
+    setFormDisabled(true);
+    document.querySelector('.nf-form-modal').classList.add('nf-saving');
 
     try {
       let saved;
-      if (_formCtx.invoice) {
+      if (isEdit) {
         saved = await updateInvoiceFields(_formCtx.invoice, payload);
         AdminShell.toast('Nota fiscal atualizada com sucesso.', 'success');
       } else {
@@ -477,6 +851,10 @@ window.NotasFiscais = (function () {
         const pdfFile = document.getElementById('nf_pdf').files[0];
         saved = await createInvoice(payload, xmlFile, pdfFile);
         AdminShell.toast('NF-e adicionada com sucesso.', 'success');
+        if (payload.emitente_nome || payload.emitente_documento) {
+          try { localStorage.setItem('alfa_nf_emitente', JSON.stringify({ nome: payload.emitente_nome, doc: payload.emitente_documento })); }
+          catch (e) { /* ignora */ }
+        }
       }
       document.getElementById('nfFormModal').classList.remove('open');
       const cb = _formCtx.onSaved; const closedCb = _formCtx.onClosed;
@@ -484,10 +862,15 @@ window.NotasFiscais = (function () {
       if (cb) cb(saved);
       else if (closedCb) closedCb();
     } catch (err) {
-      AdminShell.toast(err.message || 'Não foi possível completar a operação. Tente novamente.', 'error');
+      const msg = err.message || 'Não foi possível completar a operação. Tente novamente.';
+      AdminShell.toast(msg, 'error');
+      if (/chave de acesso/i.test(msg)) { updateChaveState(msg); if (isMobileStep()) goToStep(2); }
+      else if (/XML|PDF/.test(msg) && isMobileStep()) { goToStep(3); }
     } finally {
       saveBtn.disabled = false;
       saveBtn.textContent = originalTxt;
+      setFormDisabled(false);
+      document.querySelector('.nf-form-modal').classList.remove('nf-saving');
     }
   }
 
