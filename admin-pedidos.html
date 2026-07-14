@@ -38,13 +38,18 @@
             <option value="entregue">Entregue</option>
             <option value="cancelado">Cancelado</option>
           </select>
+          <select id="nfFilter" style="padding:9px 12px;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-main);">
+            <option value="">NF-e: todos</option>
+            <option value="com">Com NF-e</option>
+            <option value="sem">Sem NF-e</option>
+          </select>
         </div>
         <div id="ordCount" style="font-size:12.5px;color:var(--text-muted);"></div>
       </div>
 
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Total</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Total</th><th>Status</th><th>NF-e</th><th></th></tr></thead>
           <tbody id="ordTbody"></tbody>
         </table>
       </div>
@@ -65,11 +70,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase-client.js"></script>
 <script src="admin-shell.js"></script>
+<script src="admin-notas-fiscais.js"></script>
 <script>
 const STATUS_LABELS = { aguardando_pagamento:'Aguardando Pagamento', pago:'Pago', preparando:'Em Preparação', enviado:'Em Transporte', entregue:'Entregue', cancelado:'Cancelado' };
 const STATUS_COLORS = { aguardando_pagamento:'amber', pago:'blue', preparando:'blue', enviado:'blue', entregue:'green', cancelado:'red' };
 let ORDERS = [];
 let canEdit = false;
+let NF_ORDER_IDS = new Set(); // pedidos com NF-e anexada — pra badge/filtro na listagem
 
 function fmtBRL(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
 function fmtDate(iso) { return new Date(iso).toLocaleDateString('pt-BR') + ' ' + new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
@@ -81,20 +88,29 @@ async function loadOrders() {
     .order('created_at', { ascending: false });
   if (error) { console.error(error); return; }
   ORDERS = data || [];
+
+  if (AdminShell.can('notas_fiscais.visualizar')) {
+    const { data: nf } = await window.sb.from('notas_fiscais').select('pedido_id').is('deleted_at', null);
+    NF_ORDER_IDS = new Set((nf || []).map(n => n.pedido_id));
+  }
+
   renderTable();
 }
 
 function renderTable() {
   const q = document.getElementById('searchInp').value.trim().toLowerCase();
   const statusF = document.getElementById('statusFilter').value;
+  const nfF = document.getElementById('nfFilter').value;
   let list = ORDERS.filter(o => {
     if (q && !(o.order_number || '').toLowerCase().includes(q)) return false;
     if (statusF && o.status !== statusF) return false;
+    if (nfF === 'com' && !NF_ORDER_IDS.has(o.id)) return false;
+    if (nfF === 'sem' && NF_ORDER_IDS.has(o.id)) return false;
     return true;
   });
   document.getElementById('ordCount').textContent = list.length + ' pedido' + (list.length !== 1 ? 's' : '');
   const tbody = document.getElementById('ordTbody');
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Nenhum pedido encontrado.</td></tr>'; return; }
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhum pedido encontrado.</td></tr>'; return; }
   tbody.innerHTML = list.map(o => `
     <tr>
       <td class="strong">#${o.order_number || o.id}</td>
@@ -102,6 +118,7 @@ function renderTable() {
       <td>${fmtDate(o.created_at)}</td>
       <td class="strong">${fmtBRL(o.total)}</td>
       <td><span class="status-pill ${STATUS_COLORS[o.status] || 'gray'}">${STATUS_LABELS[o.status] || o.status}</span></td>
+      <td>${window.NotasFiscais ? NotasFiscais.renderStatusBadge(NF_ORDER_IDS.has(o.id)) : ''}</td>
       <td><button class="btn btn-secondary btn-sm" onclick="openDetail(${o.id})">Ver detalhes</button></td>
     </tr>`).join('');
 }
@@ -152,9 +169,24 @@ window.openDetail = async function (id) {
         <div class="totals-row"><span>Frete</span><span>${order.freight ? fmtBRL(order.freight) : 'Grátis'}</span></div>
         <div class="totals-row grand"><span>Total</span><span>${fmtBRL(order.total)}</span></div>
       </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Nota Fiscal</div>
+      <div id="nfOrderSection"></div>
     </div>`;
 
   document.getElementById('ordModal').classList.add('open');
+
+  if (window.NotasFiscais && AdminShell.can('notas_fiscais.visualizar')) {
+    NotasFiscais.renderOrderSection(document.getElementById('nfOrderSection'), order, {
+      onBeforeSubModal: () => document.getElementById('ordModal').classList.remove('open'),
+      onAfterSubModal: () => document.getElementById('ordModal').classList.add('open'),
+      onChanged: (hasNf) => { NF_ORDER_IDS[hasNf ? 'add' : 'delete'](order.id); renderTable(); },
+    });
+  } else {
+    document.getElementById('nfOrderSection').innerHTML = '<div class="detail-line">Sem permissão para ver notas fiscais.</div>';
+  }
 };
 
 window.saveStatus = async function (id) {
@@ -170,6 +202,7 @@ function closeModal() { document.getElementById('ordModal').classList.remove('op
 
 document.getElementById('searchInp').addEventListener('input', renderTable);
 document.getElementById('statusFilter').addEventListener('change', renderTable);
+document.getElementById('nfFilter').addEventListener('change', renderTable);
 
 (async function () {
   const session = await AdminShell.init('pedidos');

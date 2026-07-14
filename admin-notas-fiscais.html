@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Notas Fiscais — Painel Admin</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('alfa_theme')||'dark';</script>
+<link rel="stylesheet" href="admin.css">
+<style>
+.nf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:22px;}
+.nf-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow-sm);}
+.nf-card-lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:8px;}
+.nf-card-val{font-size:23px;font-weight:800;color:var(--text-main);}
+
+.nf-more-toggle{background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:var(--radius-sm);padding:9px 14px;font-size:12.5px;font-weight:700;cursor:pointer;}
+.nf-more-panel{display:none;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:18px;}
+.nf-more-panel.open{display:block;}
+
+.nf-files-cell span{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;padding:3px 7px;border-radius:var(--radius-full);background:var(--success-soft);color:var(--success);margin-right:4px;}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;flex-wrap:wrap;}
+.pager-info{font-size:12px;color:var(--text-muted);}
+.pager-btns{display:flex;gap:8px;}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <div id="admin-sidebar-mount"></div>
+  <div class="admin-main">
+    <div class="admin-topbar">
+      <div>
+        <div class="admin-topbar-title">Notas Fiscais</div>
+      </div>
+      <div class="admin-topbar-actions">
+        <button class="btn btn-primary" id="btnAddNf">+ Adicionar NF-e</button>
+      </div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-insight-bar" id="admin-insight-bar" style="display:none"></div>
+
+      <p style="font-size:13px;color:var(--text-muted);margin:-8px 0 18px;">
+        Central de armazenamento e consulta das notas fiscais anexadas aos pedidos. A emissão da NF-e
+        continua sendo feita no ERP — aqui só ficam o XML, o PDF/DANFE e os dados de cada nota.
+      </p>
+
+      <div class="nf-grid" id="nfKpis"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="search" class="search-box" id="fSearch" placeholder="Buscar por número, pedido, chave ou cliente...">
+          <select id="fStatus" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-main);font-size:13px;">
+            <option value="">Todos os status</option>
+            <option value="anexada">Anexada</option>
+            <option value="pendente">Pendente</option>
+            <option value="cancelada">Cancelada</option>
+            <option value="substituida">Substituída</option>
+          </select>
+          <select id="fSort" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-main);font-size:13px;">
+            <option value="recentes">Mais recentes</option>
+            <option value="antigas">Mais antigas</option>
+            <option value="maior">Maior valor</option>
+            <option value="menor">Menor valor</option>
+            <option value="numero">Número da NF-e</option>
+          </select>
+          <button class="nf-more-toggle" id="btnMoreFilters">Mais filtros</button>
+        </div>
+        <div id="totalCount" style="font-size:12.5px;color:var(--text-muted);"></div>
+      </div>
+
+      <div class="nf-more-panel" id="moreFiltersPanel">
+        <div class="field-row">
+          <div class="field"><label>Emitida a partir de</label><input type="date" id="fDataIni"></div>
+          <div class="field"><label>Emitida até</label><input type="date" id="fDataFim"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Valor mínimo (R$)</label><input type="number" step="0.01" min="0" id="fValorMin"></div>
+          <div class="field"><label>Valor máximo (R$)</label><input type="number" step="0.01" min="0" id="fValorMax"></div>
+        </div>
+        <div class="field"><label>Cadastrada por</label><select id="fUsuario"><option value="">Todos</option></select></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Número</th><th>Pedido</th><th>Cliente</th><th>CPF/CNPJ</th>
+            <th>Emissão</th><th>Valor</th><th>Status</th><th>Arquivos</th><th></th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="9" class="table-empty">Carregando...</td></tr></tbody>
+        </table>
+        <div class="pager">
+          <div class="pager-info" id="pagerInfo">—</div>
+          <div class="pager-btns">
+            <button class="btn btn-secondary btn-sm" id="btnPrev">← Anterior</button>
+            <button class="btn btn-secondary btn-sm" id="btnNext">Próxima →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="admin-shell.js"></script>
+<script src="admin-notas-fiscais.js"></script>
+<script>
+const PAGE_SIZE = 25;
+const NF = window.NotasFiscais;
+let page = 0;
+let totalRows = 0;
+let ROWS = [];
+let searchTimer = null;
+
+function buildQuery() {
+  let q = window.sb.from('notas_fiscais').select('*, orders(order_number)', { count: 'exact' }).is('deleted_at', null);
+
+  const search = document.getElementById('fSearch').value.trim();
+  const status = document.getElementById('fStatus').value;
+  const dtIni = document.getElementById('fDataIni').value;
+  const dtFim = document.getElementById('fDataFim').value;
+  const valMin = document.getElementById('fValorMin').value;
+  const valMax = document.getElementById('fValorMax').value;
+  const usuario = document.getElementById('fUsuario').value;
+  const sort = document.getElementById('fSort').value;
+
+  if (status) q = q.eq('status', status);
+  if (dtIni) q = q.gte('data_emissao', dtIni);
+  if (dtFim) q = q.lte('data_emissao', dtFim);
+  if (valMin) q = q.gte('valor_total', Number(valMin));
+  if (valMax) q = q.lte('valor_total', Number(valMax));
+  if (usuario) q = q.eq('criado_por', usuario);
+  if (search) {
+    const term = search.replace(/^#/, '');
+    q = q.or(`numero_nfe.ilike.%${term}%,chave_acesso.ilike.%${term.replace(/\D/g, '') || term}%,cliente_nome.ilike.%${term}%,cliente_documento.ilike.%${term}%`);
+  }
+
+  const sortMap = { recentes: ['created_at', false], antigas: ['created_at', true], maior: ['valor_total', false], menor: ['valor_total', true], numero: ['numero_nfe', true] };
+  const [col, asc] = sortMap[sort] || sortMap.recentes;
+  q = q.order(col, { ascending: asc });
+
+  return q.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+}
+
+async function loadPage() {
+  document.getElementById('tbody').innerHTML = '<tr><td colspan="9" class="table-empty">Carregando...</td></tr>';
+  const { data, count, error } = await buildQuery();
+  if (error) { AdminShell.toast(NF.friendlyError(error), 'error'); return; }
+  ROWS = data || [];
+  totalRows = count || 0;
+  renderTable();
+  renderPager();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  if (!ROWS.length) { tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Nenhuma nota fiscal encontrada.</td></tr>'; return; }
+  tbody.innerHTML = ROWS.map(inv => `
+    <tr>
+      <td class="strong">${inv.numero_nfe}</td>
+      <td>#${inv.orders ? inv.orders.order_number : inv.pedido_id}</td>
+      <td>${inv.cliente_nome || '—'}</td>
+      <td>${inv.cliente_documento || '—'}</td>
+      <td>${NF.fmtDate(inv.data_emissao)}</td>
+      <td class="strong">${NF.fmtBRL(inv.valor_total)}</td>
+      <td><span class="status-pill ${NF.STATUS_COLORS[inv.status] || 'gray'}">${NF.STATUS_LABELS[inv.status] || inv.status}</span></td>
+      <td class="nf-files-cell"><span>XML</span><span>PDF</span></td>
+      <td><button class="btn btn-secondary btn-sm" data-id="${inv.id}">Ver detalhes</button></td>
+    </tr>`).join('');
+
+  tbody.querySelectorAll('button[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inv = ROWS.find(r => String(r.id) === btn.dataset.id);
+      if (!inv) return;
+      NF.openDetailModal(inv, inv.orders ? inv.orders.order_number : null, {
+        orderHref: 'admin-pedidos.html?q=' + encodeURIComponent(inv.orders ? inv.orders.order_number : ''),
+        onChanged: () => { loadPage(); loadKpis(); },
+      });
+    });
+  });
+}
+
+function renderPager() {
+  const from = totalRows ? page * PAGE_SIZE + 1 : 0;
+  const to = Math.min(totalRows, page * PAGE_SIZE + PAGE_SIZE);
+  document.getElementById('pagerInfo').textContent = totalRows ? `${from}–${to} de ${totalRows}` : 'Nenhum resultado';
+  document.getElementById('totalCount').textContent = totalRows + ' nota' + (totalRows === 1 ? '' : 's') + ' fiscal' + (totalRows === 1 ? '' : 'is');
+  document.getElementById('btnPrev').disabled = page === 0;
+  document.getElementById('btnNext').disabled = to >= totalRows;
+}
+
+async function loadKpis() {
+  const startMonth = new Date(); startMonth.setDate(1); startMonth.setHours(0, 0, 0, 0);
+  const [totalRes, mesRes, pedidosRes, valorRes] = await Promise.all([
+    window.sb.from('notas_fiscais').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+    window.sb.from('notas_fiscais').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', startMonth.toISOString()),
+    window.sb.from('orders').select('id', { count: 'exact', head: true }),
+    window.sb.from('notas_fiscais').select('valor_total').is('deleted_at', null).gte('created_at', startMonth.toISOString()),
+  ]);
+  const total = totalRes.count || 0;
+  const noMes = mesRes.count || 0;
+  const semNota = Math.max(0, (pedidosRes.count || 0) - total);
+  const valorMes = (valorRes.data || []).reduce((s, r) => s + Number(r.valor_total || 0), 0);
+
+  document.getElementById('nfKpis').innerHTML = `
+    <div class="nf-card"><div class="nf-card-lbl">Total de NF-e armazenadas</div><div class="nf-card-val">${total}</div></div>
+    <div class="nf-card"><div class="nf-card-lbl">Adicionadas no mês</div><div class="nf-card-val">${noMes}</div></div>
+    <div class="nf-card"><div class="nf-card-lbl">Pedidos sem NF-e</div><div class="nf-card-val">${semNota}</div></div>
+    <div class="nf-card"><div class="nf-card-lbl">Valor total no mês</div><div class="nf-card-val">${NF.fmtBRL(valorMes)}</div></div>`;
+}
+
+async function loadUsuarios() {
+  const { data } = await window.sb.from('profiles').select('id,full_name').neq('role', 'cliente').order('full_name');
+  const sel = document.getElementById('fUsuario');
+  (data || []).forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.full_name || p.id; sel.appendChild(o); });
+}
+
+document.getElementById('btnAddNf').addEventListener('click', () => {
+  NF.openFormModal({ onSaved: () => { loadPage(); loadKpis(); } });
+});
+
+document.getElementById('btnMoreFilters').addEventListener('click', () => {
+  document.getElementById('moreFiltersPanel').classList.toggle('open');
+});
+
+document.getElementById('fSearch').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { page = 0; loadPage(); }, 300);
+});
+['fStatus', 'fSort', 'fDataIni', 'fDataFim', 'fValorMin', 'fValorMax', 'fUsuario'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => { page = 0; loadPage(); });
+});
+document.getElementById('btnPrev').addEventListener('click', () => { if (page > 0) { page--; loadPage(); } });
+document.getElementById('btnNext').addEventListener('click', () => { page++; loadPage(); });
+
+(async function () {
+  const session = await AdminShell.init('notas-fiscais');
+  if (!session) return;
+  await Promise.all([loadPage(), loadKpis(), loadUsuarios()]);
+})();
+</script>
+</body>
+</html>
