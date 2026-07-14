@@ -52,6 +52,58 @@ window.NotasFiscais = (function () {
     return null;
   }
 
+  // ── leitura automática do XML da NF-e (DOMParser nativo, sem lib nova) ──
+  // Estrutura pensada pra ser fácil de estender: um novo campo é só mais uma
+  // chamada de text(tag, root) — não precisa mexer no resto do fluxo.
+  function parseNfeXml(xmlText) {
+    let doc;
+    try {
+      doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+    } catch (e) {
+      return { ok: false, error: 'corrupt' };
+    }
+    if (!doc || doc.getElementsByTagName('parsererror').length) return { ok: false, error: 'corrupt' };
+
+    const infNFe = doc.getElementsByTagName('infNFe')[0];
+    if (!infNFe) return { ok: false, error: 'invalid' };
+
+    const text = (tag, root) => {
+      const el = (root || doc).getElementsByTagName(tag)[0];
+      return el && el.textContent ? el.textContent.trim() : null;
+    };
+
+    const ide = doc.getElementsByTagName('ide')[0];
+    const emit = doc.getElementsByTagName('emit')[0];
+    const icmsTot = doc.getElementsByTagName('ICMSTot')[0];
+    const infProt = doc.getElementsByTagName('infProt')[0]; // só existe no XML "processado" (nfeProc)
+
+    // Chave de acesso: prioriza o protocolo de autorização; se o XML for só a
+    // NFe (sem protNFe), extrai dos 44 dígitos no atributo Id="NFe...".
+    let chave = infProt ? text('chNFe', infProt) : null;
+    if (!chave) {
+      const id = infNFe.getAttribute('Id') || '';
+      const m = id.match(/(\d{44})/);
+      chave = m ? m[1] : null;
+    }
+
+    return {
+      ok: true,
+      data: {
+        numero_nfe: ide ? text('nNF', ide) : null,
+        serie: ide ? text('serie', ide) : null,
+        chave_acesso: chave,
+        // dhEmi/dhSaiEnt (NFe 4.0, com hora) ou dEmi/dSaiEnt (3.10, só data)
+        data_emissao: ide ? (text('dhEmi', ide) || text('dEmi', ide)) : null,
+        data_saida: ide ? (text('dhSaiEnt', ide) || text('dSaiEnt', ide)) : null,
+        natureza_operacao: ide ? text('natOp', ide) : null,
+        valor_total: icmsTot ? text('vNF', icmsTot) : null,
+        protocolo_autorizacao: infProt ? text('nProt', infProt) : null,
+        emitente_documento: emit ? (text('CNPJ', emit) || text('CPF', emit)) : null,
+        emitente_nome: emit ? text('xNome', emit) : null,
+      },
+    };
+  }
+
   function friendlyError(error) {
     console.error('[NotasFiscais]', error);
     const msg = (error && error.message) || '';
@@ -284,6 +336,13 @@ window.NotasFiscais = (function () {
       .nf-upload-file-size{font-size:11px;color:var(--text-muted);margin-top:2px;}
       .nf-upload-file-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
       .nf-upload-error{font-size:11.5px;color:var(--danger);font-weight:600;padding:0 16px 14px;}
+      .nf-upload-parse-status{font-size:11px;margin-top:3px;font-weight:600;}
+      .nf-upload-parse-status.nf-parse-ok{color:var(--success);}
+      .nf-upload-parse-status.nf-parse-warn{color:var(--warning);}
+
+      /* ═══ campo preenchido automaticamente pelo XML (só leitura) ═══ */
+      input.nf-readonly{background:rgba(128,128,128,.08);color:var(--text-secondary);cursor:not-allowed;}
+      .nf-auto-hint{font-size:11px;color:var(--success);font-weight:600;margin-top:5px;}
 
       /* ═══ wizard mobile ═══ */
       .nf-step-progress{display:none;}
@@ -307,6 +366,7 @@ window.NotasFiscais = (function () {
   let _step = 1;
 
   function uploadCardHtml(kind, label, hint) {
+    const parseStatus = kind === 'xml' ? '<div class="nf-upload-parse-status" id="nfXmlParseStatus"></div>' : '';
     return `
       <div class="nf-upload-card" id="nfCard_${kind}" data-kind="${kind}">
         <input type="file" id="nf_${kind}" hidden>
@@ -322,6 +382,7 @@ window.NotasFiscais = (function () {
           <div class="nf-upload-file-info">
             <div class="nf-upload-file-name"></div>
             <div class="nf-upload-file-size"></div>
+            ${parseStatus}
           </div>
           <div class="nf-upload-file-actions">
             <button type="button" class="btn btn-secondary btn-sm nf-upload-change">Trocar arquivo</button>
@@ -391,7 +452,7 @@ window.NotasFiscais = (function () {
             <div class="nf-section" data-step="4">
               <div class="nf-section-title">Informações do Emitente</div>
               <div class="field-row">
-                <div class="field"><label>Protocolo de autorização</label><input id="nf_protocolo"></div>
+                <div class="field"><label>Protocolo de autorização</label><input id="nf_protocolo"><div class="nf-auto-hint" id="nfProtocoloHint" style="display:none;">Obtido automaticamente do XML.</div></div>
                 <div class="field"><label>CNPJ do emitente</label><input id="nf_emit_doc"></div>
               </div>
               <div class="field"><label>Nome/razão social do emitente</label><input id="nf_emit_nome"></div>
@@ -438,7 +499,7 @@ window.NotasFiscais = (function () {
       if (!e.target.value) e.target.value = fmtMoneyInput(0);
     });
 
-    _xmlCardCtl = wireUploadCard('xml', validateXmlFile);
+    _xmlCardCtl = wireUploadCard('xml', validateXmlFile, handleXmlFileSelected);
     _pdfCardCtl = wireUploadCard('pdf', validatePdfFile);
 
     document.getElementById('nfFormClose').addEventListener('click', closeFormModal);
@@ -512,7 +573,7 @@ window.NotasFiscais = (function () {
 
   // ── cards de upload: input[type=file] oculto continua sendo a fonte da verdade
   // (handleFormSave lê document.getElementById('nf_xml').files[0] sem mudar nada) ──
-  function wireUploadCard(kind, validateFn) {
+  function wireUploadCard(kind, validateFn, onFileReady) {
     const card = document.getElementById('nfCard_' + kind);
     const input = document.getElementById('nf_' + kind);
     const empty = card.querySelector('.nf-upload-empty');
@@ -520,10 +581,13 @@ window.NotasFiscais = (function () {
     const errBox = card.querySelector('.nf-upload-error');
     const nameEl = card.querySelector('.nf-upload-file-name');
     const sizeEl = card.querySelector('.nf-upload-file-size');
+    const parseStatusEl = card.querySelector('.nf-upload-parse-status');
 
     function showEmpty() {
       errBox.textContent = ''; errBox.style.display = 'none'; card.classList.remove('nf-upload-error-state');
       empty.style.display = ''; filled.style.display = 'none';
+      if (parseStatusEl) { parseStatusEl.textContent = ''; parseStatusEl.className = 'nf-upload-parse-status'; }
+      if (kind === 'xml') setProtocoloFromXml(null);
     }
     function showFile(file) {
       errBox.textContent = ''; errBox.style.display = 'none'; card.classList.remove('nf-upload-error-state');
@@ -543,6 +607,7 @@ window.NotasFiscais = (function () {
       dt.items.add(file);
       input.files = dt.files;
       showFile(file);
+      if (onFileReady) onFileReady(file);
     }
 
     card.querySelector('.nf-upload-pick').addEventListener('click', () => input.click());
@@ -560,6 +625,66 @@ window.NotasFiscais = (function () {
     });
 
     return { reset: showEmpty };
+  }
+
+  // ── aplica os dados lidos do XML no formulário; protocolo vira read-only
+  // quando vem do XML (item explícito do pedido) ──
+  function showXmlParseResult(ok, msg) {
+    const el = document.getElementById('nfXmlParseStatus');
+    if (el) {
+      el.textContent = (ok ? '✔ ' : '⚠ ') + msg;
+      el.classList.toggle('nf-parse-ok', ok);
+      el.classList.toggle('nf-parse-warn', !ok);
+    }
+    AdminShell.toast(msg, ok ? 'success' : 'error');
+  }
+
+  function setProtocoloFromXml(protocolo) {
+    const input = document.getElementById('nf_protocolo');
+    const hint = document.getElementById('nfProtocoloHint');
+    if (!input) return;
+    if (protocolo) {
+      input.value = protocolo;
+      input.readOnly = true;
+      input.classList.add('nf-readonly');
+      if (hint) hint.style.display = '';
+    } else {
+      // XML sem protocolo (situação rara — ex: XML só da NFe, sem o protNFe
+      // de autorização) — libera edição manual, como pedido.
+      input.readOnly = false;
+      input.classList.remove('nf-readonly');
+      if (hint) hint.style.display = 'none';
+    }
+  }
+
+  function applyXmlDataToForm(data) {
+    if (data.numero_nfe) document.getElementById('nf_numero').value = data.numero_nfe;
+    if (data.serie) document.getElementById('nf_serie').value = data.serie;
+    if (data.chave_acesso) {
+      document.getElementById('nf_chave').value = fmtChave(data.chave_acesso);
+      updateChaveState();
+    }
+    if (data.data_emissao) document.getElementById('nf_emissao').value = data.data_emissao.slice(0, 10);
+    if (data.data_saida) document.getElementById('nf_saida').value = data.data_saida.slice(0, 10);
+    if (data.natureza_operacao) document.getElementById('nf_natureza').value = data.natureza_operacao;
+    if (data.valor_total) document.getElementById('nf_valor').value = fmtMoneyInput(Number(data.valor_total));
+    if (data.emitente_documento) document.getElementById('nf_emit_doc').value = data.emitente_documento;
+    if (data.emitente_nome) document.getElementById('nf_emit_nome').value = data.emitente_nome;
+    setProtocoloFromXml(data.protocolo_autorizacao);
+  }
+
+  async function handleXmlFileSelected(file) {
+    let text;
+    try { text = await file.text(); }
+    catch (e) { showXmlParseResult(false, 'Não foi possível ler este XML.'); return; }
+
+    const result = parseNfeXml(text);
+    if (!result.ok) {
+      showXmlParseResult(false, result.error === 'corrupt' ? 'Não foi possível ler este XML.' : 'Arquivo XML inválido.');
+      return;
+    }
+    applyXmlDataToForm(result.data);
+    showXmlParseResult(true, 'Dados da NF-e carregados automaticamente.');
   }
 
   // ── wizard mobile: mesmos campos, só a visibilidade por etapa muda ──
