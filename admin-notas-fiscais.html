@@ -190,21 +190,24 @@ function renderPager() {
 
 async function loadKpis() {
   const startMonth = new Date(); startMonth.setDate(1); startMonth.setHours(0, 0, 0, 0);
-  const [totalRes, mesRes, pedidosRes, valorRes] = await Promise.all([
+  // "Pedidos sem NF-e" só faz sentido pra pedido já pago — não emitimos nota
+  // pra pedido aguardando pagamento/cancelado, então conta só os pagos.
+  const [totalRes, mesRes, pedidosPagosRes, invoicedPaidRes, valorRes] = await Promise.all([
     window.sb.from('notas_fiscais').select('id', { count: 'exact', head: true }).is('deleted_at', null),
     window.sb.from('notas_fiscais').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', startMonth.toISOString()),
-    window.sb.from('orders').select('id', { count: 'exact', head: true }),
+    window.sb.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'pago'),
+    window.sb.from('notas_fiscais').select('id, orders!inner(status)', { count: 'exact', head: true }).is('deleted_at', null).eq('orders.status', 'pago'),
     window.sb.from('notas_fiscais').select('valor_total').is('deleted_at', null).gte('created_at', startMonth.toISOString()),
   ]);
   const total = totalRes.count || 0;
   const noMes = mesRes.count || 0;
-  const semNota = Math.max(0, (pedidosRes.count || 0) - total);
+  const semNota = Math.max(0, (pedidosPagosRes.count || 0) - (invoicedPaidRes.count || 0));
   const valorMes = (valorRes.data || []).reduce((s, r) => s + Number(r.valor_total || 0), 0);
 
   document.getElementById('nfKpis').innerHTML = `
     <div class="nf-card"><div class="nf-card-lbl">Total de NF-e armazenadas</div><div class="nf-card-val">${total}</div></div>
     <div class="nf-card"><div class="nf-card-lbl">Adicionadas no mês</div><div class="nf-card-val">${noMes}</div></div>
-    <div class="nf-card"><div class="nf-card-lbl">Pedidos sem NF-e</div><div class="nf-card-val">${semNota}</div></div>
+    <div class="nf-card"><div class="nf-card-lbl">Pedidos pagos sem NF-e</div><div class="nf-card-val">${semNota}</div></div>
     <div class="nf-card"><div class="nf-card-lbl">Valor total no mês</div><div class="nf-card-val">${NF.fmtBRL(valorMes)}</div></div>`;
 }
 
