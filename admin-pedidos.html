@@ -32,11 +32,16 @@
           <select id="statusFilter" style="padding:9px 12px;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-main);">
             <option value="">Todos os status</option>
             <option value="aguardando_pagamento">Aguardando Pagamento</option>
+            <option value="processando">Processando</option>
             <option value="pago">Pago</option>
             <option value="preparando">Em Preparação</option>
             <option value="enviado">Em Transporte</option>
             <option value="entregue">Entregue</option>
+            <option value="recusado">Recusado</option>
             <option value="cancelado">Cancelado</option>
+            <option value="estornado">Estornado</option>
+            <option value="estorno_parcial">Estornado Parcialmente</option>
+            <option value="expirado">Expirado</option>
           </select>
           <select id="nfFilter" style="padding:9px 12px;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-main);">
             <option value="">NF-e: todos</option>
@@ -72,8 +77,10 @@
 <script src="admin-shell.js"></script>
 <script src="admin-notas-fiscais.js"></script>
 <script>
-const STATUS_LABELS = { aguardando_pagamento:'Aguardando Pagamento', pago:'Pago', preparando:'Em Preparação', enviado:'Em Transporte', entregue:'Entregue', cancelado:'Cancelado' };
-const STATUS_COLORS = { aguardando_pagamento:'amber', pago:'blue', preparando:'blue', enviado:'blue', entregue:'green', cancelado:'red' };
+const STATUS_LABELS = { aguardando_pagamento:'Aguardando Pagamento', processando:'Processando', pago:'Pago', preparando:'Em Preparação', enviado:'Em Transporte', entregue:'Entregue', recusado:'Recusado', cancelado:'Cancelado', estornado:'Estornado', estorno_parcial:'Estornado Parcialmente', expirado:'Expirado' };
+const STATUS_COLORS = { aguardando_pagamento:'amber', processando:'amber', pago:'blue', preparando:'blue', enviado:'blue', entregue:'green', recusado:'red', cancelado:'red', estornado:'red', estorno_parcial:'red', expirado:'gray' };
+const PAG_STATUS_LABELS = { pendente:'Pendente', em_processamento:'Em processamento', aprovado:'Aprovado', recusado:'Recusado', cancelado:'Cancelado', estornado:'Estornado', estorno_parcial:'Estornado parcialmente' };
+const PAG_STATUS_COLORS = { pendente:'amber', em_processamento:'amber', aprovado:'green', recusado:'red', cancelado:'red', estornado:'red', estorno_parcial:'red' };
 let ORDERS = [];
 let canEdit = false;
 let NF_ORDER_IDS = new Set(); // pedidos com NF-e anexada — pra badge/filtro na listagem
@@ -127,6 +134,8 @@ window.openDetail = async function (id) {
   const { data: order, error } = await window.sb.from('orders').select('*, profiles(full_name,cpf,phone)').eq('id', id).single();
   if (error || !order) return;
   const { data: items } = await window.sb.from('order_items').select('*').eq('order_id', id);
+  const { data: pagamentos } = await window.sb.from('pagamentos').select('*').eq('pedido_id', id).order('created_at', { ascending: false });
+  const pagamento = (pagamentos && pagamentos[0]) || null;
   const addr = order.address_snapshot || {};
 
   document.getElementById('ordModalTitle').textContent = 'Pedido #' + (order.order_number || order.id);
@@ -158,6 +167,19 @@ window.openDetail = async function (id) {
       <div class="detail-line">Envio: ${order.shipping_method || '—'}</div>
       <div class="detail-line">Pagamento: ${order.payment_method || '—'}</div>
       ${order.tracking_code ? `<div class="detail-line">Rastreio: ${order.tracking_code}</div>` : ''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Pagamento — Mercado Pago</div>
+      ${pagamento ? `
+        <div class="detail-line">Status: <span class="status-pill ${PAG_STATUS_COLORS[pagamento.status] || 'gray'}">${PAG_STATUS_LABELS[pagamento.status] || pagamento.status}</span>${pagamento.ambiente_teste ? ' <span class="status-pill amber">TESTE</span>' : ''}</div>
+        ${pagamento.status_detail ? `<div class="detail-line">Detalhe: ${pagamento.status_detail}</div>` : ''}
+        <div class="detail-line">Método: ${pagamento.metodo === 'pix' ? 'Pix' : pagamento.metodo === 'credit_card' ? 'Cartão de crédito' : (pagamento.metodo || '—')}</div>
+        <div class="detail-line">ID da Order (MP): ${pagamento.mp_order_id || '—'}</div>
+        <div class="detail-line">ID do pagamento (MP): ${pagamento.mp_payment_id || '—'}</div>
+        <div class="detail-line">Valor: ${fmtBRL(pagamento.valor)}</div>
+        <div class="detail-line">Criado em: ${fmtDate(pagamento.created_at)}</div>
+      ` : '<div class="detail-line">Nenhuma tentativa de pagamento via Mercado Pago registrada para este pedido.</div>'}
     </div>
 
     <div class="detail-section">

@@ -1,0 +1,5 @@
+# Segredos — nunca sobem pro GitHub.
+.env
+.env.local
+.env.*.local
+supabase/.env
